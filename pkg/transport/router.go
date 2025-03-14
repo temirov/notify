@@ -3,23 +3,22 @@ package transport
 import (
 	"log/slog"
 	"net/http"
-	"strings"
 
-	"github.com/temirov/notify/pkg/config"
 	"github.com/temirov/notify/pkg/transport/handler"
 	"gorm.io/gorm"
 )
 
-const (
-	RouteNotifications      = "/notifications"
-	RouteNotificationsExact = "/notifications/"
-)
-
-func CreateRouter(db *gorm.DB, logger *slog.Logger, authToken string, cfg config.Config) http.Handler {
+func CreateRouter(db *gorm.DB, logger *slog.Logger, authToken string) http.Handler {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc(RouteNotifications, authMiddleware(handler.CreateNotificationHandler(db, logger), authToken))
-	mux.HandleFunc(RouteNotificationsExact, authMiddleware(handler.GetNotificationHandler(db, logger), authToken))
+	mux.HandleFunc("/notifications", authMiddleware(
+		handler.CreateNotificationHandler(db, logger),
+		authToken,
+	))
+	mux.HandleFunc("/notifications/", authMiddleware(
+		handler.GetNotificationHandler(db, logger),
+		authToken,
+	))
 
 	return mux
 }
@@ -27,17 +26,17 @@ func CreateRouter(db *gorm.DB, logger *slog.Logger, authToken string, cfg config
 func authMiddleware(next http.HandlerFunc, requiredToken string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if requiredToken == "" {
-			// no auth if token not set
 			next.ServeHTTP(w, r)
 			return
 		}
-		// Expect "Authorization: Bearer <token>"
 		authHeader := r.Header.Get("Authorization")
-		if !strings.HasPrefix(authHeader, "Bearer ") {
+		bearerPrefix := "Bearer "
+		if len(authHeader) < len(bearerPrefix) ||
+			authHeader[:len(bearerPrefix)] != bearerPrefix {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		tokenValue := strings.TrimPrefix(authHeader, "Bearer ")
+		tokenValue := authHeader[len(bearerPrefix):]
 		if tokenValue != requiredToken {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return

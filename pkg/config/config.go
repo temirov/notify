@@ -6,7 +6,6 @@ import (
 	"strconv"
 )
 
-// Config holds runtime configuration
 type Config struct {
 	ServerPort       int
 	DatabasePath     string
@@ -15,13 +14,17 @@ type Config struct {
 	MaxRetries       int
 	RetryIntervalSec int
 
-	// SendGrid-specific
+	// SendGrid
 	SendGridUsername string // typically "apikey"
 	SendGridPassword string // your SendGrid API key
-	FromEmail        string // "support@rsvp.mprlab.com"
+	FromEmail        string // e.g. "support@rsvp.mprlab.com"
+
+	// Twilio
+	TwilioAccountSID string
+	TwilioAuthToken  string
+	TwilioFromNumber string
 }
 
-// LoadConfig reads from environment variables
 func LoadConfig() Config {
 	return Config{
 		ServerPort:       getInt("SERVER_PORT", 8080),
@@ -32,8 +35,12 @@ func LoadConfig() Config {
 		RetryIntervalSec: getInt("RETRY_INTERVAL_SEC", 15),
 
 		SendGridUsername: getStr("SENDGRID_USERNAME", "apikey"),
-		SendGridPassword: getStr("SENDGRID_PASSWORD", ""), // must set your real API key
+		SendGridPassword: getStr("SENDGRID_PASSWORD", ""),
 		FromEmail:        getStr("FROM_EMAIL", "support@rsvp.mprlab.com"),
+
+		TwilioAccountSID: getStr("TWILIO_ACCOUNT_SID", ""),
+		TwilioAuthToken:  getStr("TWILIO_AUTH_TOKEN", ""),
+		TwilioFromNumber: getStr("TWILIO_FROM_NUMBER", ""),
 	}
 }
 

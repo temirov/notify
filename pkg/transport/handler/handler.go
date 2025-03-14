@@ -82,7 +82,9 @@ func CreateNotificationHandler(db *gorm.DB, logger *slog.Logger) http.HandlerFun
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			logger.Error("Failed to write response", "error", err)
+		}
 	}
 }
 
@@ -94,7 +96,6 @@ func GetNotificationHandler(db *gorm.DB, logger *slog.Logger) http.HandlerFunc {
 			return
 		}
 
-		// The route is "/notifications/" so the next part is the ID
 		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/notifications/"), "/")
 		if len(pathParts) < 1 {
 			http.Error(w, "Invalid path", http.StatusBadRequest)
@@ -131,6 +132,8 @@ func GetNotificationHandler(db *gorm.DB, logger *slog.Logger) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			logger.Error("Failed to write response", "error", err)
+		}
 	}
 }
