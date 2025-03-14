@@ -64,5 +64,4 @@ func (l *slogGormLogger) Trace(_ context.Context, begin time.Time, fc func() (st
 			"elapsed", elapsed,
 		)
 	}
-	// else you could do debug-level logging of queries if you want
 }

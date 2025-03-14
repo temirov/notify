@@ -4,66 +4,107 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
+	"sync"
 )
 
 type Config struct {
-	ServerPort       int
 	DatabasePath     string
-	AuthToken        string
+	GRPCAuthToken    string
 	LogLevel         string
 	MaxRetries       int
 	RetryIntervalSec int
 
-	// SendGrid
-	SendGridUsername string // typically "apikey"
-	SendGridPassword string // your SendGrid API key
-	FromEmail        string // e.g. "support@rsvp.mprlab.com"
+	SendGridUsername   string
+	SendGridPassword   string
+	SendSmtpServer     string
+	SendSmtpServerPort int
+	FromEmail          string
 
-	// Twilio
 	TwilioAccountSID string
 	TwilioAuthToken  string
 	TwilioFromNumber string
 }
 
-func LoadConfig() Config {
-	return Config{
-		ServerPort:       getInt("SERVER_PORT", 8080),
-		DatabasePath:     getStr("DATABASE_PATH", "app.db"),
-		AuthToken:        getStr("NOTIFICATION_AUTH_TOKEN", ""), // optional
-		LogLevel:         getStr("LOG_LEVEL", "INFO"),           // "DEBUG","INFO","WARN","ERROR"
-		MaxRetries:       getInt("MAX_RETRIES", 3),
-		RetryIntervalSec: getInt("RETRY_INTERVAL_SEC", 15),
+// LoadConfig retrieves all required environment variables concurrently.
+// It returns a fully populated Config instance or an aggregated error if any variable is missing or invalid.
+func LoadConfig() (Config, error) {
+	var configuration Config
+	var waitGroup sync.WaitGroup
 
-		SendGridUsername: getStr("SENDGRID_USERNAME", "apikey"),
-		SendGridPassword: getStr("SENDGRID_PASSWORD", ""),
-		FromEmail:        getStr("FROM_EMAIL", "support@rsvp.mprlab.com"),
+	// Define tasks using helper functions.
+	taskFunctions := []func() error{
+		loadEnvString("DATABASE_PATH", &configuration.DatabasePath),
+		loadEnvString("GRPC_AUTH_TOKEN", &configuration.GRPCAuthToken),
+		loadEnvString("LOG_LEVEL", &configuration.LogLevel),
+		loadEnvInt("MAX_RETRIES", &configuration.MaxRetries),
+		loadEnvInt("RETRY_INTERVAL_SEC", &configuration.RetryIntervalSec),
+		loadEnvString("SENDGRID_USERNAME", &configuration.SendGridUsername),
+		loadEnvString("SENDGRID_PASSWORD", &configuration.SendGridPassword),
+		loadEnvString("SENDGRID_SMTP_SERVER", &configuration.SendSmtpServer),
+		loadEnvInt("SENDGRID_SMTP_SERVER_PORT", &configuration.SendSmtpServerPort),
+		loadEnvString("FROM_EMAIL", &configuration.FromEmail),
+		loadEnvString("TWILIO_ACCOUNT_SID", &configuration.TwilioAccountSID),
+		loadEnvString("TWILIO_AUTH_TOKEN", &configuration.TwilioAuthToken),
+		loadEnvString("TWILIO_FROM_NUMBER", &configuration.TwilioFromNumber),
+	}
 
-		TwilioAccountSID: getStr("TWILIO_ACCOUNT_SID", ""),
-		TwilioAuthToken:  getStr("TWILIO_AUTH_TOKEN", ""),
-		TwilioFromNumber: getStr("TWILIO_FROM_NUMBER", ""),
+	// Buffered channel to collect errors from tasks.
+	errorChannel := make(chan error, len(taskFunctions))
+
+	// Launch each task concurrently.
+	for _, taskFunction := range taskFunctions {
+		waitGroup.Add(1)
+		go func(task func() error) {
+			defer waitGroup.Done()
+			if taskError := task(); taskError != nil {
+				errorChannel <- taskError
+			}
+		}(taskFunction)
+	}
+
+	// Wait for all tasks to finish.
+	waitGroup.Wait()
+	close(errorChannel)
+
+	var errorMessages []string
+	for errorValue := range errorChannel {
+		errorMessages = append(errorMessages, errorValue.Error())
+	}
+	if len(errorMessages) > 0 {
+		// Using a constant format string fixes the vet error.
+		return Config{}, fmt.Errorf("configuration errors: %s", strings.Join(errorMessages, ", "))
+	}
+	return configuration, nil
+}
+
+// loadEnvString returns a function that retrieves a non-empty string environment variable.
+func loadEnvString(environmentKey string, destination *string) func() error {
+	const missingEnvFormat = "missing environment variable %s"
+	return func() error {
+		environmentValue := os.Getenv(environmentKey)
+		if environmentValue == "" {
+			return fmt.Errorf(missingEnvFormat, environmentKey)
+		}
+		*destination = environmentValue
+		return nil
 	}
 }
 
-func (c Config) ServerAddress() string {
-	return fmt.Sprintf(":%d", c.ServerPort)
-}
-
-func getStr(key, defaultVal string) string {
-	val := os.Getenv(key)
-	if val == "" {
-		return defaultVal
+// loadEnvInt returns a function that retrieves an integer environment variable.
+func loadEnvInt(environmentKey string, destination *int) func() error {
+	const missingEnvFormat = "missing environment variable %s"
+	const invalidIntFormat = "invalid integer for %s: %v"
+	return func() error {
+		environmentValue := os.Getenv(environmentKey)
+		if environmentValue == "" {
+			return fmt.Errorf(missingEnvFormat, environmentKey)
+		}
+		parsedInteger, conversionError := strconv.Atoi(environmentValue)
+		if conversionError != nil {
+			return fmt.Errorf(invalidIntFormat, environmentKey, conversionError)
+		}
+		*destination = parsedInteger
+		return nil
 	}
-	return val
-}
-
-func getInt(key string, defaultVal int) int {
-	valStr := os.Getenv(key)
-	if valStr == "" {
-		return defaultVal
-	}
-	valInt, err := strconv.Atoi(valStr)
-	if err != nil {
-		return defaultVal
-	}
-	return valInt
 }

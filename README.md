@@ -1,94 +1,144 @@
 # Notify
 
-A simple REST service to send **email** and **SMS** notifications with support for:
+Notify is a production‑quality notification service written in Go. It exposes a gRPC interface for sending **email** and **SMS** notifications. The service uses SQLite (via GORM) for persistent storage and runs a background worker to retry failed notifications using exponential backoff. Structured logging is provided using Go’s built‑in `slog` package.
 
-- **SQLite + GORM** for persistent storage
-- **Background worker** for retries on failed or queued messages
-- **SendGrid SMTP** (for email)
-- **Twilio REST API** (for SMS)
-- **Bearer token** authentication (optional)
-- **Configurable** via environment variables
-- **Graceful shutdown** and structured logging (`slog`)
+> **Note:** This version of Notify is gRPC‑only; all interactions are via gRPC.
+
+---
 
 ## Table of Contents
 
+- [Features](#features)
 - [Requirements](#requirements)
 - [Installation](#installation)
-- [Environment Variables](#environment-variables)
-- [Running](#running)
-- [Usage Examples](#usage-examples)
-    - [Sending Email](#1-sending-an-email)
-    - [Sending SMS](#2-sending-an-sms)
-    - [Retrieving a Notification](#3-retrieving-a-notification)
+- [Configuration](#configuration)
+- [Running the Server](#running-the-server)
+- [Using the gRPC API](#using-the-grpc-api)
+  - [Command‑Line Client Test](#command-line-client-test)
+  - [Using grpcurl](#using-grpcurl)
 - [End-to-End Flow](#end-to-end-flow)
+- [Logging and Debugging](#logging-and-debugging)
 - [License](#license)
+
+---
+
+## Features
+
+- **gRPC-Only API:**  
+  All interactions (sending notifications, retrieving statuses) are done via a gRPC interface.
+
+- **Email and SMS Notifications:**  
+  - **Email:** Delivered via SMTP using SendGrid’s settings (with fallback logic for recommended port usage).
+  - **SMS:** Delivered using Twilio’s REST API.
+
+- **Persistent Storage:**  
+  Uses SQLite with GORM to store notifications and track their statuses.
+
+- **Background Worker:**  
+  Processes queued or failed notifications and retries them with exponential backoff.
+
+- **Structured Logging:**  
+  Uses Go’s `slog` package for structured logging with configurable levels.
+
+- **Bearer Token Authentication:**  
+  Secure access to the gRPC endpoints via a bearer token.
 
 ---
 
 ## Requirements
 
-- **Go 1.21+** (for `log/slog` usage)
-- A **SendGrid** account (or another SMTP-compatible service) for email.
-- A **Twilio** account if you want to send SMS (requires an Account SID, Auth Token, and a Twilio phone number).
+- **Go 1.21+** (tested with Go 1.24)
+- An SMTP‑compatible service account (SendGrid is configured by default)
+- A Twilio account for SMS notifications (if needed)
+- SQLite (or any GORM‑compatible database)
 
 ---
 
 ## Installation
 
-Clone or download this repo:
+Clone the repository and navigate to the project directory:
 
 ```bash
 git clone https://github.com/temirov/notify.git
 cd notify
 ```
 
-Make sure Go is available:
+Install dependencies:
 
 ```bash
-go version
+go mod tidy
 ```
 
-*(Should be Go 1.21+.)*
+Build the Notify server:
+
+```bash
+go build -o notify ./cmd/notify
+```
 
 ---
 
-## Environment Variables
+## Configuration
 
-| Variable                  | Default                       | Description                                                                                                                                                      |
-|---------------------------|-------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `SERVER_PORT`             | `8080`                        | Port where the HTTP server listens.                                                                                                                              |
-| `DATABASE_PATH`           | `app.db`                      | SQLite file location.                                                                                                                                            |
-| `LOG_LEVEL`               | `INFO`                        | Possible values: `DEBUG`, `INFO`, `WARN`, `ERROR`.                                                                                                               |
-| `NOTIFICATION_AUTH_TOKEN` | *(empty)*                     | If set, service requires `Authorization: Bearer <token>` header for all requests. If empty, no auth is required.                                                 |
-| `MAX_RETRIES`             | `3`                           | How many times the background worker will attempt to resend a failed notification.                                                                               |
-| `RETRY_INTERVAL_SEC`      | `15`                          | Interval (in seconds) between retry scans.                                                                                                                       |
-| `SENDGRID_USERNAME`       | `apikey`                      | SMTP username for SendGrid (often literally "apikey").                                                                                                           |
-| `SENDGRID_PASSWORD`       | *(empty)*                     | Your SendGrid API key (used as the SMTP password).                                                                                                               |
-| `FROM_EMAIL`              | `support@rsvp.mprlab.com`     | The default “from” address for sending emails. Must match your verified domain on SendGrid.                                                                      |
-| `TWILIO_ACCOUNT_SID`      | *(empty)*                     | Your Twilio Account SID, used if you want to send SMS.                                                                                                           |
-| `TWILIO_AUTH_TOKEN`       | *(empty)*                     | Your Twilio Auth Token, also required for sending SMS.                                                                                                           |
-| `TWILIO_FROM_NUMBER`      | *(empty)*                     | Your Twilio phone number (e.g., +12015550123) from which SMS messages are sent.                                                                                  |
+Notify is configured via environment variables. Create a `.env` file or export the variables manually. Below is an explanation of each variable:
 
-### Example `.env` File
+- **DATABASE_PATH:**  
+  Path to the SQLite database file (e.g., `app.db`).
 
-You can create a local `.env` file for convenience:
+- **LOG_LEVEL:**  
+  Logging level. Possible values: `DEBUG`, `INFO`, `WARN`, `ERROR`.
+
+- **NOTIFICATION_AUTH_TOKEN:**  
+  Bearer token used for authenticating gRPC requests. All clients must supply this token.
+
+- **MAX_RETRIES:**  
+  Maximum number of times the background worker will retry sending a failed notification.
+
+- **RETRY_INTERVAL_SEC:**  
+  Base interval (in seconds) between retry scans. The actual backoff is exponential.
+
+- **SENDGRID_USERNAME:**  
+  SMTP username for SendGrid (typically set to `"apikey"`).
+
+- **SENDGRID_PASSWORD:**  
+  Your SendGrid API key (used as the SMTP password).
+
+- **FROM_EMAIL:**  
+  The email address from which notifications are sent. This must be a verified sender with your SMTP provider.
+
+- **SENDGRID_SMTP_SERVER:**  
+  The SMTP host for SendGrid (e.g., `smtp.sendgrid.net`).
+
+- **SENDGRID_SMTP_SERVER_PORT:**  
+  The SMTP port for SendGrid. For best results, configure this to `587`. If set to `465`, the service will log a warning and switch to `587`.
+
+- **TWILIO_ACCOUNT_SID:**  
+  Your Twilio Account SID, used for sending SMS messages.
+
+- **TWILIO_AUTH_TOKEN:**  
+  Your Twilio Auth Token.
+
+- **TWILIO_FROM_NUMBER:**  
+  The phone number (in E.164 format) from which SMS messages are sent.
+
+Example `.env` file:
 
 ```bash
-SERVER_PORT=8080
 DATABASE_PATH=app.db
 LOG_LEVEL=DEBUG
 NOTIFICATION_AUTH_TOKEN=my-secret-token
 
 SENDGRID_USERNAME=apikey
 SENDGRID_PASSWORD=YOUR_SENDGRID_API_KEY
-FROM_EMAIL=support@rsvp.mprlab.com
+FROM_EMAIL=support@yourdomain.com
+SENDGRID_SMTP_SERVER=smtp.sendgrid.net
+SENDGRID_SMTP_SERVER_PORT=465
 
 TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxx
 TWILIO_AUTH_TOKEN=yyyyyyyyyyyyyy
 TWILIO_FROM_NUMBER=+12015550123
 ```
 
-Then export them:
+Load the environment variables:
 
 ```bash
 export $(cat .env | xargs)
@@ -96,176 +146,85 @@ export $(cat .env | xargs)
 
 ---
 
-## Running
+## Running the Server
 
-1. **Install Dependencies**:
+Start the Notify gRPC server by running the built executable:
 
-   ```bash
-   go mod tidy
-   ```
+```bash
+./notify
+```
 
-2. **Build**:
-
-   ```bash
-   go build -o notify ./cmd/notify
-   ```
-
-3. **Run**:
-
-   ```bash
-   ./notify
-   ```
-
-   The server listens on port `:8080` (or whatever you set via `SERVER_PORT`).
-
-Logs will appear in your console. If you set `LOG_LEVEL=DEBUG`, you’ll see more detailed logs.
+By default, the server listens on port `50051`. The server initializes the SQLite database, starts the background retry worker, and registers the gRPC NotificationService with bearer token authentication.
 
 ---
 
-## Usage Examples
+## Using the gRPC API
 
-Below are some basic `curl` commands to interact with the service. **If** you set the `NOTIFICATION_AUTH_TOKEN`, make
-sure to include the header `Authorization: Bearer <token>`.
+### Command‑Line Client Test
 
-### 1. Sending an Email
+A lightweight client test application is available under `cmd/client_test/main.go`. This client wraps the gRPC calls and demonstrates sending a notification. To run the client test, use:
 
-**Endpoint**: `POST /notifications`
+```bash
+go run cmd/client_test/main.go --to your-email@yourdomain.com --subject "Test Email" --message "Hello, world!"
+```
 
-Request Body:
+If successful, you will see output similar to:
 
-```json
-{
-  "notification_type": "email",
+```
+Notification sent successfully. Notification ID: notif-1741932356116855000
+```
+
+### Using grpcurl
+
+You can also use [grpcurl](https://github.com/fullstorydev/grpcurl) to interact directly with the gRPC API. For example, to send an email notification:
+
+```bash
+grpcurl -d '{
+  "notification_type": "EMAIL",
   "recipient": "someone@example.com",
-  "subject": "Test Subject",
-  "message": "Hello from the email notification service"
-}
+  "subject": "Test Email",
+  "message": "Hello from Notify!"
+}' -H "Authorization: Bearer my-secret-token" localhost:50051 notify.NotificationService/SendNotification
 ```
 
-Example `curl`:
+To retrieve the status of a notification (replace `<notification_id>` with the actual ID):
 
 ```bash
-curl -X POST http://localhost:8080/notifications \
-     -H "Content-Type: application/json" \
-     -H "Authorization: Bearer my-secret-token" \
-     -d '{
-       "notification_type": "email",
-       "recipient": "someone@example.com",
-       "subject": "Test Subject",
-       "message": "Hello from the email notification service"
-     }'
+grpcurl -d '{
+  "notification_id": "<notification_id>"
+}' -H "Authorization: Bearer my-secret-token" localhost:50051 notify.NotificationService/GetNotificationStatus
 ```
-
-**Response** (JSON) will have fields like:
-
-```json
-{
-  "notification_id": "9bb604f8-ea1f-4ea0-96c9-1f56e720909e",
-  "notification_type": "email",
-  "recipient": "someone@example.com",
-  "subject": "Test Subject",
-  "message": "Hello from the email notification service",
-  "status": "queued",
-  "provider_message_id": "",
-  "created_at": "2025-03-13T10:00:00Z",
-  "updated_at": "2025-03-13T10:00:00Z",
-  "retry_count": 0
-}
-```
-
-### 2. Sending an SMS
-
-**Endpoint**: `POST /notifications`
-
-Request Body:
-
-```json
-{
-  "notification_type": "sms",
-  "recipient": "+14155550123",
-  "message": "Hello from the SMS notification service"
-}
-```
-
-*(For Twilio, `recipient` must be a valid phone number with country code, e.g. `+14155550123`.)*
-
-Example `curl`:
-
-```bash
-curl -X POST http://localhost:8080/notifications \
-     -H "Content-Type: application/json" \
-     -H "Authorization: Bearer my-secret-token" \
-     -d '{
-       "notification_type": "sms",
-       "recipient": "+14155550123",
-       "message": "Hello from the SMS notification service"
-     }'
-```
-
-**Response** (JSON) might look like:
-
-```json
-{
-  "notification_id": "ed2f0284-7d08-45ec-9ab3-92c3bcee54bc",
-  "notification_type": "sms",
-  "recipient": "+14155550123",
-  "message": "Hello from the SMS notification service",
-  "status": "queued",
-  "provider_message_id": "",
-  "created_at": "2025-03-13T10:00:00Z",
-  "updated_at": "2025-03-13T10:00:00Z",
-  "retry_count": 0
-}
-```
-
-### 3. Retrieving a Notification
-
-**Endpoint**: `GET /notifications/{notification_id}`
-
-Example:
-
-```bash
-curl -X GET http://localhost:8080/notifications/ed2f0284-7d08-45ec-9ab3-92c3bcee54bc \
-     -H "Authorization: Bearer my-secret-token"
-```
-
-**Response** (JSON):
-
-```json
-{
-  "notification_id": "ed2f0284-7d08-45ec-9ab3-92c3bcee54bc",
-  "notification_type": "sms",
-  "recipient": "+14155550123",
-  "message": "Hello from the SMS notification service",
-  "status": "sent",
-  "provider_message_id": "some-twilio-sid-or-response",
-  "created_at": "2025-03-13T10:00:00Z",
-  "updated_at": "2025-03-13T10:00:10Z",
-  "retry_count": 1
-}
-```
-
-- The `status` might be `"queued"` initially, then become `"sent"` or `"failed"` after the background worker processes it.
-- The background worker runs every `RETRY_INTERVAL_SEC` seconds and attempts to send messages with `status=queued` or
-  `status=failed` (retrying up to `MAX_RETRIES` times).
 
 ---
 
 ## End-to-End Flow
 
-1. **You** POST a new notification (either `email` or `sms`) to the service; the record goes into SQLite with `status=queued`.
-2. **The background worker** picks up queued notifications and calls the appropriate provider:
-    - **SendGrid (SMTP)** for email
-    - **Twilio (HTTP REST)** for SMS
-3. If sending is successful:
-    - The notification’s `status` becomes `sent`.
-    - The `provider_message_id` might store something like `"sendgrid-provider-id"` or the Twilio SID.
-4. If sending fails, the service sets `status=failed` and increments `retry_count`. On the next cycle, it tries again
-   until `retry_count` reaches `MAX_RETRIES`.
-5. **You** can poll `GET /notifications/{id}` to see if it’s been sent or failed.
+1. **Submission:**  
+   A client submits a notification (email or SMS) via gRPC using the `SendNotification` RPC. The notification is stored in the SQLite database with a status of `queued`.
+
+2. **Immediate Dispatch:**  
+   The server attempts to dispatch the notification immediately:
+    - **Email:** Sent via SMTP using SendGrid settings (with fallback logic if port 465 is used).
+    - **SMS:** Sent using Twilio’s REST API.
+
+3. **Background Worker:**  
+   A background worker periodically polls the database for notifications that are still queued or have failed and reattempts sending them with exponential backoff.
+
+4. **Status Retrieval:**  
+   Clients can query the notification’s status using the `GetNotificationStatus` RPC until the status changes to `sent` or `failed`.
+
+---
+
+## Logging and Debugging
+
+- **Structured Logging:**  
+  Notify uses Go’s `slog` package for structured logging. Set the logging level via the `LOG_LEVEL` environment variable.
+
+- **Debug Output:**  
+  When `LOG_LEVEL` is set to `DEBUG`, detailed messages (including SMTP debug output and fallback warnings) are logged. Sensitive data (such as API keys) is masked in the logs.
 
 ---
 
 ## License
 
-This project is licensed under the [MIT License](./LICENSE). Feel free to adapt for your own needs.
+This project is licensed under the [MIT License](./LICENSE).

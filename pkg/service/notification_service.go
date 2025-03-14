@@ -3,179 +3,178 @@ package service
 import (
 	"context"
 	"fmt"
-	"io"
-	"log/slog"
-	"math/rand"
-	"net/http"
-	"net/url"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/temirov/notify/pkg/model"
 	"gorm.io/gorm"
+	"log/slog"
 )
 
-func StartRetryWorker(
-	ctx context.Context,
-	database *gorm.DB,
-	logger *slog.Logger,
-	retryIntervalSec int,
-	maxRetries int,
-) {
-	ticker := time.NewTicker(time.Duration(retryIntervalSec) * time.Second)
-	defer ticker.Stop()
+// Config holds the configuration required by NotificationService.
+// It is exported so that external packages (such as main) can pass a valid configuration.
+type Config struct {
+	MaxRetries         int
+	RetryIntervalSec   int
+	SendSmtpServer     string
+	SendSmtpServerPort int
+	SendGridUsername   string
+	SendGridPassword   string
+	FromEmail          string
+	TwilioAccountSID   string
+	TwilioAuthToken    string
+	TwilioFromNumber   string
+}
 
-	logger.Info("Starting retry worker",
-		"interval_sec", retryIntervalSec,
-		"max_retries", maxRetries,
-	)
+// NotificationService defines the external interface for processing notifications.
+type NotificationService interface {
+	// SendNotification immediately dispatches the notification and stores it.
+	SendNotification(request model.NotificationRequest) (model.NotificationResponse, error)
+	// GetNotificationStatus retrieves the stored notification status.
+	GetNotificationStatus(notificationID string) (model.NotificationResponse, error)
+	// StartRetryWorker begins a background worker that processes retries with exponential backoff.
+	StartRetryWorker(ctx context.Context)
+}
 
+type notificationServiceImpl struct {
+	database         *gorm.DB
+	logger           *slog.Logger
+	emailSender      EmailSender
+	smsSender        SmsSender
+	maxRetries       int
+	retryIntervalSec int
+}
+
+// NewNotificationService creates a new NotificationService instance using the provided
+// database, logger, and service-level configuration. It instantiates its own protocol-specific senders.
+func NewNotificationService(db *gorm.DB, logger *slog.Logger, cfg Config) NotificationService {
+	emailSenderInstance := NewSendGridEmailSender(SMTPConfig{
+		Host:        cfg.SendSmtpServer,
+		Port:        fmt.Sprintf("%d", cfg.SendSmtpServerPort),
+		Username:    cfg.SendGridUsername,
+		Password:    cfg.SendGridPassword,
+		FromAddress: cfg.FromEmail,
+	}, logger)
+	smsSenderInstance := NewTwilioSmsSender(cfg.TwilioAccountSID, cfg.TwilioAuthToken, cfg.TwilioFromNumber, logger)
+	return &notificationServiceImpl{
+		database:         db,
+		logger:           logger,
+		emailSender:      emailSenderInstance,
+		smsSender:        smsSenderInstance,
+		maxRetries:       cfg.MaxRetries,
+		retryIntervalSec: cfg.RetryIntervalSec,
+	}
+}
+
+func (serviceInstance *notificationServiceImpl) SendNotification(request model.NotificationRequest) (model.NotificationResponse, error) {
+	if request.Recipient == "" || request.Message == "" {
+		serviceInstance.logger.Error("Missing required fields", "recipient", request.Recipient, "message", request.Message)
+		return model.NotificationResponse{}, fmt.Errorf("missing required fields: recipient or message")
+	}
+	notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
+	newNotification := model.NewNotification(notificationID, request)
+
+	var dispatchError error
+	switch newNotification.NotificationType {
+	case model.NotificationEmail:
+		dispatchError = serviceInstance.emailSender.SendEmail(newNotification.Recipient, newNotification.Subject, newNotification.Message)
+		if dispatchError == nil {
+			newNotification.Status = model.StatusSent
+			// When using SMTP no provider message ID is returned.
+		}
+	case model.NotificationSMS:
+		var providerMessageID string
+		providerMessageID, dispatchError = serviceInstance.smsSender.SendSms(newNotification.Recipient, newNotification.Message)
+		if dispatchError == nil {
+			newNotification.Status = model.StatusSent
+			newNotification.ProviderMessageID = providerMessageID
+		}
+	default:
+		serviceInstance.logger.Error("Unsupported notification type", "type", newNotification.NotificationType)
+		return model.NotificationResponse{}, fmt.Errorf("unsupported notification type: %s", newNotification.NotificationType)
+	}
+	if dispatchError != nil {
+		serviceInstance.logger.Error("Immediate dispatch failed", "error", dispatchError)
+		newNotification.Status = model.StatusFailed
+	}
+	if err := model.CreateNotification(serviceInstance.database, &newNotification); err != nil {
+		serviceInstance.logger.Error("Failed to store notification", "error", err)
+		return model.NotificationResponse{}, err
+	}
+	return model.NewNotificationResponse(newNotification), nil
+}
+
+func (serviceInstance *notificationServiceImpl) GetNotificationStatus(notificationID string) (model.NotificationResponse, error) {
+	if notificationID == "" {
+		serviceInstance.logger.Error("Missing notification_id")
+		return model.NotificationResponse{}, fmt.Errorf("missing notification_id")
+	}
+	notificationRecord, retrievalError := model.MustGetNotificationByID(serviceInstance.database, notificationID)
+	if retrievalError != nil {
+		serviceInstance.logger.Error("Failed to retrieve notification", "error", retrievalError)
+		return model.NotificationResponse{}, retrievalError
+	}
+	return model.NewNotificationResponse(*notificationRecord), nil
+}
+
+func (serviceInstance *notificationServiceImpl) StartRetryWorker(ctx context.Context) {
+	retryTicker := time.NewTicker(time.Duration(serviceInstance.retryIntervalSec) * time.Second)
+	defer retryTicker.Stop()
+
+	serviceInstance.logger.Info("Starting retry worker", "base_interval_sec", serviceInstance.retryIntervalSec, "max_retries", serviceInstance.maxRetries)
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Info("Retry worker shutting down")
+			serviceInstance.logger.Info("Retry worker shutting down")
 			return
-		case <-ticker.C:
-			processRetries(database, logger, maxRetries)
+		case <-retryTicker.C:
+			serviceInstance.processRetries()
 		}
 	}
 }
 
-func processRetries(database *gorm.DB, logger *slog.Logger, maxRetries int) {
-	var notifications []model.Notification
-	err := database.Where(
-		"(status = ? OR status = ?) AND retry_count < ?",
-		model.StatusQueued, model.StatusFailed, maxRetries,
-	).Find(&notifications).Error
-	if err != nil {
-		logger.Error("Fetching notifications for retry failed", "error", err)
+func (serviceInstance *notificationServiceImpl) processRetries() {
+	notificationRecords, fetchError := model.GetQueuedOrFailedNotifications(serviceInstance.database, serviceInstance.maxRetries)
+	if fetchError != nil {
+		serviceInstance.logger.Error("Failed to fetch notifications for retry", "error", fetchError)
 		return
 	}
-	if len(notifications) == 0 {
-		return // nothing to retry
-	}
-
-	for _, notif := range notifications {
-		providerID, finalStatus := sendNotification(notif, logger)
-		notif.ProviderMessageID = providerID
-		notif.Status = finalStatus
-		notif.RetryCount++
-		notif.LastAttemptedAt = time.Now().UTC()
-
-		saveErr := database.Save(&notif).Error
-		if saveErr != nil {
-			logger.Error("Failed to update notification after send attempt", "error", saveErr)
+	currentTime := time.Now().UTC()
+	for _, notificationRecord := range notificationRecords {
+		// Apply exponential backoff: baseInterval * 2^(retry_count)
+		if notificationRecord.RetryCount > 0 {
+			backoffDuration := time.Duration(serviceInstance.retryIntervalSec) * time.Second * (1 << uint(notificationRecord.RetryCount))
+			nextAttemptTime := notificationRecord.LastAttemptedAt.Add(backoffDuration)
+			if currentTime.Before(nextAttemptTime) {
+				continue
+			}
+		}
+		var dispatchError error
+		switch notificationRecord.NotificationType {
+		case model.NotificationEmail:
+			dispatchError = serviceInstance.emailSender.SendEmail(notificationRecord.Recipient, notificationRecord.Subject, notificationRecord.Message)
+			if dispatchError == nil {
+				notificationRecord.Status = model.StatusSent
+				notificationRecord.ProviderMessageID = ""
+			}
+		case model.NotificationSMS:
+			var providerMessageID string
+			providerMessageID, dispatchError = serviceInstance.smsSender.SendSms(notificationRecord.Recipient, notificationRecord.Message)
+			if dispatchError == nil {
+				notificationRecord.Status = model.StatusSent
+				notificationRecord.ProviderMessageID = providerMessageID
+			}
+		default:
+			serviceInstance.logger.Error("Unsupported notification type during retry", "notification_id", notificationRecord.NotificationID)
+			continue
+		}
+		if dispatchError != nil {
+			serviceInstance.logger.Error("Dispatch failed during retry", "notification_id", notificationRecord.NotificationID, "error", dispatchError)
+			notificationRecord.Status = model.StatusFailed
+		}
+		notificationRecord.RetryCount++
+		notificationRecord.LastAttemptedAt = currentTime
+		if saveError := model.SaveNotification(serviceInstance.database, &notificationRecord); saveError != nil {
+			serviceInstance.logger.Error("Failed to update notification after retry", "notification_id", notificationRecord.NotificationID, "error", saveError)
 		}
 	}
-}
-
-func sendNotification(notif model.Notification, logger *slog.Logger) (string, string) {
-	logger.Info("Sending notification",
-		"notification_id", notif.NotificationID,
-		"type", notif.NotificationType,
-		"retry_count", notif.RetryCount,
-	)
-
-	switch notif.NotificationType {
-	case model.NotificationEmail:
-		return sendWithSendGrid(notif, logger)
-	case model.NotificationSMS:
-		return sendWithTwilio(notif, logger)
-	default:
-		return "", model.StatusUnknown
-	}
-}
-
-// ========== Email via SendGrid SMTP ========== //
-
-func sendWithSendGrid(notif model.Notification, logger *slog.Logger) (string, string) {
-	sender := NewEmailSender(SMTPConfig{
-		Host:        "smtp.sendgrid.net",
-		Port:        "587",
-		Username:    getEnvOrDefault("SENDGRID_USERNAME", "apikey"),
-		Password:    getEnvOrDefault("SENDGRID_PASSWORD", ""),
-		FromAddress: getEnvOrDefault("FROM_EMAIL", "support@rsvp.mprlab.com"),
-	})
-
-	// Optional: random failure for demonstration
-	if rand.Intn(3) == 0 {
-		logger.Error("Simulated email send failure for demonstration")
-		return "", model.StatusFailed
-	}
-
-	err := sender.SendEmail(notif.Recipient, notif.Subject, notif.Message)
-	if err != nil {
-		logger.Error("SendGrid SMTP send failed", "error", err)
-		return "", model.StatusFailed
-	}
-	return "sendgrid-provider-id", model.StatusSent
-}
-
-// ========== SMS via Twilio REST API ========== //
-
-func sendWithTwilio(notif model.Notification, logger *slog.Logger) (string, string) {
-	accountSID := getEnvOrDefault("TWILIO_ACCOUNT_SID", "")
-	authToken := getEnvOrDefault("TWILIO_AUTH_TOKEN", "")
-	fromNumber := getEnvOrDefault("TWILIO_FROM_NUMBER", "")
-
-	if accountSID == "" || authToken == "" || fromNumber == "" {
-		logger.Error("Twilio env variables missing")
-		return "", model.StatusFailed
-	}
-
-	// Optional: random failure for demonstration
-	if rand.Intn(3) == 0 {
-		logger.Error("Simulated SMS send failure for demonstration")
-		return "", model.StatusFailed
-	}
-
-	// Twilio API endpoint
-	twilioURL := fmt.Sprintf("https://api.twilio.com/2010-04-01/Accounts/%s/Messages.json", accountSID)
-
-	// Encode form data
-	data := url.Values{}
-	data.Set("To", notif.Recipient)
-	data.Set("From", fromNumber)
-	data.Set("Body", notif.Message)
-
-	req, err := http.NewRequest(http.MethodPost, twilioURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		logger.Error("Failed to create Twilio request", "error", err)
-		return "", model.StatusFailed
-	}
-
-	req.SetBasicAuth(accountSID, authToken)
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		logger.Error("Twilio request failed", "error", err)
-		return "", model.StatusFailed
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 300 {
-		logger.Error("Twilio API error",
-			"status", resp.StatusCode,
-			"body", string(bodyBytes),
-		)
-		return "", model.StatusFailed
-	}
-
-	// Typically Twilio responds with JSON containing "sid"
-	// For demonstration, let's parse out the "sid" or just store entire body as "providerMessageID"
-	return string(bodyBytes), model.StatusSent
-}
-
-// ========== Helpers ========== //
-
-func getEnvOrDefault(key, def string) string {
-	val := os.Getenv(key)
-	if val == "" {
-		return def
-	}
-	return val
 }
