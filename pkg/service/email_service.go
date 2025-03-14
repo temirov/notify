@@ -1,36 +1,36 @@
 package service
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
 	"net/smtp"
 	"strings"
+	"time"
 
+	"github.com/temirov/notify/pkg/config"
 	"log/slog"
 )
 
-// SMTPConfig holds the SMTP settings.
 type SMTPConfig struct {
 	Host        string
 	Port        string
 	Username    string
 	Password    string
 	FromAddress string
+	Timeouts    config.Config
 }
 
-// EmailSender defines the behavior of an email sending service.
 type EmailSender interface {
-	SendEmail(recipient string, subject string, message string) error
+	SendEmail(ctx context.Context, recipient string, subject string, message string) error
 }
 
-// SendGridEmailSender implements EmailSender using net/smtp.
 type SendGridEmailSender struct {
 	Config SMTPConfig
 	Logger *slog.Logger
 }
 
-// NewSendGridEmailSender creates a new SendGridEmailSender with the provided configuration and logger.
 func NewSendGridEmailSender(configuration SMTPConfig, logger *slog.Logger) *SendGridEmailSender {
 	return &SendGridEmailSender{
 		Config: configuration,
@@ -38,10 +38,7 @@ func NewSendGridEmailSender(configuration SMTPConfig, logger *slog.Logger) *Send
 	}
 }
 
-// SendEmail sends an email using the SMTP settings.
-// If the port is "465", it uses an implicit TLS connection.
-// All errors, including those from Quit, are returned to the caller.
-func (senderInstance *SendGridEmailSender) SendEmail(recipient string, subject string, message string) error {
+func (senderInstance *SendGridEmailSender) SendEmail(ctx context.Context, recipient string, subject string, message string) error {
 	emailMessage := buildEmailMessage(senderInstance.Config.FromAddress, recipient, subject, message)
 
 	if senderInstance.Config.Port == "465" {
@@ -51,60 +48,54 @@ func (senderInstance *SendGridEmailSender) SendEmail(recipient string, subject s
 			ServerName:         senderInstance.Config.Host,
 		}
 
-		tlsConnection, dialError := tls.Dial("tcp", serverAddr, tlsConfig)
+		dialer := &net.Dialer{
+			Timeout: time.Duration(senderInstance.Config.Timeouts.ConnectionTimeoutSec) * time.Second,
+		}
+
+		tlsConnection, dialError := tls.DialWithDialer(dialer, "tcp", serverAddr, tlsConfig)
 		if dialError != nil {
 			return fmt.Errorf("failed to dial TLS: %w", dialError)
 		}
+		defer tlsConnection.Close()
 
-		// Create SMTP client using the established TLS connection.
-		smtpClient, clientError := smtp.NewClient(tlsConnection, senderInstance.Config.Host)
-		if clientError != nil {
-			_ = tlsConnection.Close() // Close if SMTP client creation fails.
-			return fmt.Errorf("failed to create SMTP client: %w", clientError)
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 
-		// Authenticate.
+		smtpClient, clientError := smtp.NewClient(tlsConnection, senderInstance.Config.Host)
+		if clientError != nil {
+			return fmt.Errorf("failed to create SMTP client: %w", clientError)
+		}
+		defer smtpClient.Quit()
+
 		smtpAuth := smtp.PlainAuth("", senderInstance.Config.Username, senderInstance.Config.Password, senderInstance.Config.Host)
 		if authError := smtpClient.Auth(smtpAuth); authError != nil {
-			_ = smtpClient.Quit()
 			return fmt.Errorf("failed to authenticate: %w", authError)
 		}
 
-		// Set the sender and recipient.
 		if mailError := smtpClient.Mail(senderInstance.Config.FromAddress); mailError != nil {
-			_ = smtpClient.Quit()
 			return fmt.Errorf("failed to set sender: %w", mailError)
 		}
 		if rcptError := smtpClient.Rcpt(recipient); rcptError != nil {
-			_ = smtpClient.Quit()
 			return fmt.Errorf("failed to set recipient: %w", rcptError)
 		}
 
-		// Write the email data.
 		dataWriter, dataError := smtpClient.Data()
 		if dataError != nil {
-			_ = smtpClient.Quit()
 			return fmt.Errorf("failed to get data writer: %w", dataError)
 		}
 		_, writeError := dataWriter.Write([]byte(emailMessage))
 		if writeError != nil {
-			_ = dataWriter.Close()
-			_ = smtpClient.Quit()
+			dataWriter.Close()
 			return fmt.Errorf("failed to write email message: %w", writeError)
 		}
 		if closeDataError := dataWriter.Close(); closeDataError != nil {
-			_ = smtpClient.Quit()
 			return fmt.Errorf("failed to close data writer: %w", closeDataError)
 		}
 
-		// Call Quit explicitly and return any error.
-		if quitError := smtpClient.Quit(); quitError != nil {
-			return fmt.Errorf("failed to quit SMTP client: %w", quitError)
-		}
 		return nil
 	}
 
-	// For other ports (e.g. 587), use smtp.SendMail (which handles STARTTLS).
 	smtpAddress := net.JoinHostPort(senderInstance.Config.Host, senderInstance.Config.Port)
 	smtpAuth := smtp.PlainAuth("", senderInstance.Config.Username, senderInstance.Config.Password, senderInstance.Config.Host)
 	sendError := smtp.SendMail(smtpAddress, smtpAuth, senderInstance.Config.FromAddress, []string{recipient}, []byte(emailMessage))

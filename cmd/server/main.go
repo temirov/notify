@@ -26,10 +26,7 @@ type notificationServiceServer struct {
 	logger              *slog.Logger
 }
 
-// SendNotification implements the RPC by converting the gRPC request to a model request,
-// calling our business-logic service, and mapping the model response back to gRPC.
 func (server *notificationServiceServer) SendNotification(ctx context.Context, req *grpcapi.NotificationRequest) (*grpcapi.NotificationResponse, error) {
-	// Map the gRPC NotificationType to the internal model type.
 	var internalType model.NotificationType
 	switch req.NotificationType {
 	case grpcapi.NotificationType_EMAIL:
@@ -41,7 +38,6 @@ func (server *notificationServiceServer) SendNotification(ctx context.Context, r
 		return nil, fmt.Errorf("unsupported notification type: %v", req.NotificationType)
 	}
 
-	// Build the model request.
 	modelRequest := model.NotificationRequest{
 		NotificationType: internalType,
 		Recipient:        req.Recipient,
@@ -49,25 +45,22 @@ func (server *notificationServiceServer) SendNotification(ctx context.Context, r
 		Message:          req.Message,
 	}
 
-	// Call the business logic.
-	modelResponse, err := server.notificationService.SendNotification(modelRequest)
+	modelResponse, err := server.notificationService.SendNotification(ctx, modelRequest)
 	if err != nil {
 		server.logger.Error("Service SendNotification error", "error", err)
 		return nil, err
 	}
 
-	// Map the model response back to a gRPC response.
 	return mapModelToGrpcResponse(modelResponse), nil
 }
 
-// GetNotificationStatus implements the RPC by querying the business logic and mapping the response.
 func (server *notificationServiceServer) GetNotificationStatus(ctx context.Context, req *grpcapi.GetNotificationStatusRequest) (*grpcapi.NotificationResponse, error) {
 	if req.NotificationId == "" {
 		server.logger.Error("Missing notification ID")
 		return nil, fmt.Errorf("missing notification ID")
 	}
 
-	modelResponse, err := server.notificationService.GetNotificationStatus(req.NotificationId)
+	modelResponse, err := server.notificationService.GetNotificationStatus(ctx, req.NotificationId)
 	if err != nil {
 		server.logger.Error("Service GetNotificationStatus error", "error", err)
 		return nil, err
@@ -132,20 +125,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	serviceCfg := service.Config{
-		MaxRetries:         configuration.MaxRetries,
-		RetryIntervalSec:   configuration.RetryIntervalSec,
-		SendSmtpServer:     configuration.SendSmtpServer,
-		SendSmtpServerPort: configuration.SendSmtpServerPort,
-		SendGridUsername:   configuration.SendGridUsername,
-		SendGridPassword:   configuration.SendGridPassword,
-		FromEmail:          configuration.FromEmail,
-		TwilioAccountSID:   configuration.TwilioAccountSID,
-		TwilioAuthToken:    configuration.TwilioAuthToken,
-		TwilioFromNumber:   configuration.TwilioFromNumber,
-	}
-
-	notificationSvc := service.NewNotificationService(databaseInstance, mainLogger, serviceCfg)
+	notificationSvc := service.NewNotificationService(databaseInstance, mainLogger, configuration)
 
 	// Start the background retry worker.
 	workerCtx, cancelWorker := context.WithCancel(context.Background())

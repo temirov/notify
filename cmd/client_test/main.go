@@ -4,16 +4,16 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/temirov/notify/pkg/client"
 	"os"
 	"time"
 
+	"github.com/temirov/notify/pkg/client"
+	"github.com/temirov/notify/pkg/config"
 	"github.com/temirov/notify/pkg/grpcapi"
 	"log/slog"
 )
 
 func main() {
-	// Parse command-line flags.
 	recipient := flag.String("to", "", "Recipient email address")
 	subject := flag.String("subject", "", "Email subject")
 	message := flag.String("message", "", "Email message body")
@@ -24,21 +24,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create a structured logger.
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load configuration: %v\n", err)
+		os.Exit(1)
+	}
+
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
 
-	// Create the NotificationClient. All business logic (such as authentication, dialing,
-	// and request handling) is encapsulated in the client package.
-	notificationClient, err := client.NewNotificationClient(logger)
+	notificationClient, err := client.NewNotificationClient(logger, cfg)
 	if err != nil {
 		logger.Error("Failed to create notification client", "error", err)
 		os.Exit(1)
 	}
 	defer notificationClient.Close()
 
-	// Build the gRPC NotificationRequest for an email.
 	notificationRequest := &grpcapi.NotificationRequest{
 		NotificationType: grpcapi.NotificationType_EMAIL,
 		Recipient:        *recipient,
@@ -46,12 +48,10 @@ func main() {
 		Message:          *message,
 	}
 
-	// Use a context with timeout.
-	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.OperationTimeoutSec)*time.Second)
 	defer cancel()
 
-	// Send the notification using the client package.
-	response, err := notificationClient.SendNotification(notificationRequest)
+	response, err := notificationClient.SendNotification(ctx, notificationRequest)
 	if err != nil {
 		logger.Error("Failed to send notification", "error", err)
 		os.Exit(1)

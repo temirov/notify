@@ -24,15 +24,17 @@ type Config struct {
 	TwilioAccountSID string
 	TwilioAuthToken  string
 	TwilioFromNumber string
+
+	// Simplified timeout settings (in seconds)
+	ConnectionTimeoutSec int
+	OperationTimeoutSec  int
 }
 
 // LoadConfig retrieves all required environment variables concurrently.
-// It returns a fully populated Config instance or an aggregated error if any variable is missing or invalid.
 func LoadConfig() (Config, error) {
 	var configuration Config
 	var waitGroup sync.WaitGroup
 
-	// Define tasks using helper functions.
 	taskFunctions := []func() error{
 		loadEnvString("DATABASE_PATH", &configuration.DatabasePath),
 		loadEnvString("GRPC_AUTH_TOKEN", &configuration.GRPCAuthToken),
@@ -47,12 +49,11 @@ func LoadConfig() (Config, error) {
 		loadEnvString("TWILIO_ACCOUNT_SID", &configuration.TwilioAccountSID),
 		loadEnvString("TWILIO_AUTH_TOKEN", &configuration.TwilioAuthToken),
 		loadEnvString("TWILIO_FROM_NUMBER", &configuration.TwilioFromNumber),
+		loadEnvInt("CONNECTION_TIMEOUT_SEC", &configuration.ConnectionTimeoutSec),
+		loadEnvInt("OPERATION_TIMEOUT_SEC", &configuration.OperationTimeoutSec),
 	}
 
-	// Buffered channel to collect errors from tasks.
 	errorChannel := make(chan error, len(taskFunctions))
-
-	// Launch each task concurrently.
 	for _, taskFunction := range taskFunctions {
 		waitGroup.Add(1)
 		go func(task func() error) {
@@ -63,7 +64,6 @@ func LoadConfig() (Config, error) {
 		}(taskFunction)
 	}
 
-	// Wait for all tasks to finish.
 	waitGroup.Wait()
 	close(errorChannel)
 
@@ -72,13 +72,11 @@ func LoadConfig() (Config, error) {
 		errorMessages = append(errorMessages, errorValue.Error())
 	}
 	if len(errorMessages) > 0 {
-		// Using a constant format string fixes the vet error.
 		return Config{}, fmt.Errorf("configuration errors: %s", strings.Join(errorMessages, ", "))
 	}
 	return configuration, nil
 }
 
-// loadEnvString returns a function that retrieves a non-empty string environment variable.
 func loadEnvString(environmentKey string, destination *string) func() error {
 	const missingEnvFormat = "missing environment variable %s"
 	return func() error {
@@ -91,7 +89,6 @@ func loadEnvString(environmentKey string, destination *string) func() error {
 	}
 }
 
-// loadEnvInt returns a function that retrieves an integer environment variable.
 func loadEnvInt(environmentKey string, destination *int) func() error {
 	const missingEnvFormat = "missing environment variable %s"
 	const invalidIntFormat = "invalid integer for %s: %v"

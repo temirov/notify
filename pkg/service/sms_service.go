@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -8,15 +9,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/temirov/notify/pkg/config"
 	"log/slog"
 )
 
-// SmsSender defines the behavior of an SMS sending service.
 type SmsSender interface {
-	SendSms(recipient string, message string) (string, error)
+	SendSms(ctx context.Context, recipient string, message string) (string, error)
 }
 
-// TwilioSmsSender implements SmsSender using Twilio's REST API.
 type TwilioSmsSender struct {
 	AccountSID string
 	AuthToken  string
@@ -25,26 +25,24 @@ type TwilioSmsSender struct {
 	Logger     *slog.Logger
 }
 
-// NewTwilioSmsSender creates a new TwilioSmsSender with the provided configuration.
-func NewTwilioSmsSender(accountSID string, authToken string, fromNumber string, logger *slog.Logger) *TwilioSmsSender {
+func NewTwilioSmsSender(accountSID string, authToken string, fromNumber string, logger *slog.Logger, cfg config.Config) *TwilioSmsSender {
 	return &TwilioSmsSender{
 		AccountSID: accountSID,
 		AuthToken:  authToken,
 		FromNumber: fromNumber,
-		HTTPClient: &http.Client{Timeout: 10 * time.Second},
+		HTTPClient: &http.Client{Timeout: time.Duration(cfg.ConnectionTimeoutSec) * time.Second},
 		Logger:     logger,
 	}
 }
 
-// SendSms sends an SMS using Twilio's API.
-func (senderInstance *TwilioSmsSender) SendSms(recipient string, message string) (string, error) {
+func (senderInstance *TwilioSmsSender) SendSms(ctx context.Context, recipient string, message string) (string, error) {
 	formData := url.Values{}
 	formData.Set("To", recipient)
 	formData.Set("From", senderInstance.FromNumber)
 	formData.Set("Body", message)
 
 	apiEndpoint := fmt.Sprintf("https://api.twilio.com/2010-04-01/Accounts/%s/Messages.json", senderInstance.AccountSID)
-	requestInstance, requestError := http.NewRequest(http.MethodPost, apiEndpoint, strings.NewReader(formData.Encode()))
+	requestInstance, requestError := http.NewRequestWithContext(ctx, http.MethodPost, apiEndpoint, strings.NewReader(formData.Encode()))
 	if requestError != nil {
 		senderInstance.Logger.Error("Failed to create Twilio request", "error", requestError)
 		return "", requestError

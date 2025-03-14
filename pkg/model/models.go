@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -96,30 +97,26 @@ func NewNotificationResponse(n Notification) NotificationResponse {
 
 // ====================== DB CRUD METHODS ====================== //
 
-// CreateNotification inserts a new Notification.
-func CreateNotification(db *gorm.DB, n *Notification) error {
-	return db.Create(n).Error
+func CreateNotification(ctx context.Context, db *gorm.DB, n *Notification) error {
+	return db.WithContext(ctx).Create(n).Error
 }
 
-// GetNotificationByID fetches a Notification by its NotificationID field.
-func GetNotificationByID(db *gorm.DB, notificationID string) (*Notification, error) {
+func GetNotificationByID(ctx context.Context, db *gorm.DB, notificationID string) (*Notification, error) {
 	var notif Notification
-	err := db.Where("notification_id = ?", notificationID).First(&notif).Error
+	err := db.WithContext(ctx).Where("notification_id = ?", notificationID).First(&notif).Error
 	if err != nil {
 		return nil, err
 	}
 	return &notif, nil
 }
 
-// SaveNotification updates an existing Notification (e.g., after a send attempt).
-func SaveNotification(db *gorm.DB, n *Notification) error {
-	return db.Save(n).Error
+func SaveNotification(ctx context.Context, db *gorm.DB, n *Notification) error {
+	return db.WithContext(ctx).Save(n).Error
 }
 
-// GetQueuedOrFailedNotifications fetches all notifications with status=queued or failed, below maxRetries.
-func GetQueuedOrFailedNotifications(db *gorm.DB, maxRetries int) ([]Notification, error) {
+func GetQueuedOrFailedNotifications(ctx context.Context, db *gorm.DB, maxRetries int) ([]Notification, error) {
 	var notifications []Notification
-	err := db.
+	err := db.WithContext(ctx).
 		Where("(status = ? OR status = ?) AND retry_count < ?",
 			StatusQueued, StatusFailed, maxRetries).
 		Find(&notifications).Error
@@ -129,9 +126,8 @@ func GetQueuedOrFailedNotifications(db *gorm.DB, maxRetries int) ([]Notification
 	return notifications, nil
 }
 
-// MustGetNotificationByID is optional, returning a custom error if not found.
-func MustGetNotificationByID(db *gorm.DB, notificationID string) (*Notification, error) {
-	n, err := GetNotificationByID(db, notificationID)
+func MustGetNotificationByID(ctx context.Context, db *gorm.DB, notificationID string) (*Notification, error) {
+	n, err := GetNotificationByID(ctx, db, notificationID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("notification not found: %s", notificationID)

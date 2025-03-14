@@ -5,32 +5,18 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/temirov/notify/pkg/config"
 	"github.com/temirov/notify/pkg/model"
 	"gorm.io/gorm"
 	"log/slog"
 )
 
-// Config holds the configuration required by NotificationService.
-// It is exported so that external packages (such as main) can pass a valid configuration.
-type Config struct {
-	MaxRetries         int
-	RetryIntervalSec   int
-	SendSmtpServer     string
-	SendSmtpServerPort int
-	SendGridUsername   string
-	SendGridPassword   string
-	FromEmail          string
-	TwilioAccountSID   string
-	TwilioAuthToken    string
-	TwilioFromNumber   string
-}
-
 // NotificationService defines the external interface for processing notifications.
 type NotificationService interface {
 	// SendNotification immediately dispatches the notification and stores it.
-	SendNotification(request model.NotificationRequest) (model.NotificationResponse, error)
+	SendNotification(ctx context.Context, request model.NotificationRequest) (model.NotificationResponse, error)
 	// GetNotificationStatus retrieves the stored notification status.
-	GetNotificationStatus(notificationID string) (model.NotificationResponse, error)
+	GetNotificationStatus(ctx context.Context, notificationID string) (model.NotificationResponse, error)
 	// StartRetryWorker begins a background worker that processes retries with exponential backoff.
 	StartRetryWorker(ctx context.Context)
 }
@@ -46,15 +32,16 @@ type notificationServiceImpl struct {
 
 // NewNotificationService creates a new NotificationService instance using the provided
 // database, logger, and service-level configuration. It instantiates its own protocol-specific senders.
-func NewNotificationService(db *gorm.DB, logger *slog.Logger, cfg Config) NotificationService {
+func NewNotificationService(db *gorm.DB, logger *slog.Logger, cfg config.Config) NotificationService {
 	emailSenderInstance := NewSendGridEmailSender(SMTPConfig{
 		Host:        cfg.SendSmtpServer,
 		Port:        fmt.Sprintf("%d", cfg.SendSmtpServerPort),
 		Username:    cfg.SendGridUsername,
 		Password:    cfg.SendGridPassword,
 		FromAddress: cfg.FromEmail,
+		Timeouts:    cfg, // Pass the full config for timeouts
 	}, logger)
-	smsSenderInstance := NewTwilioSmsSender(cfg.TwilioAccountSID, cfg.TwilioAuthToken, cfg.TwilioFromNumber, logger)
+	smsSenderInstance := NewTwilioSmsSender(cfg.TwilioAccountSID, cfg.TwilioAuthToken, cfg.TwilioFromNumber, logger, cfg)
 	return &notificationServiceImpl{
 		database:         db,
 		logger:           logger,
@@ -65,7 +52,7 @@ func NewNotificationService(db *gorm.DB, logger *slog.Logger, cfg Config) Notifi
 	}
 }
 
-func (serviceInstance *notificationServiceImpl) SendNotification(request model.NotificationRequest) (model.NotificationResponse, error) {
+func (serviceInstance *notificationServiceImpl) SendNotification(ctx context.Context, request model.NotificationRequest) (model.NotificationResponse, error) {
 	if request.Recipient == "" || request.Message == "" {
 		serviceInstance.logger.Error("Missing required fields", "recipient", request.Recipient, "message", request.Message)
 		return model.NotificationResponse{}, fmt.Errorf("missing required fields: recipient or message")
@@ -76,14 +63,14 @@ func (serviceInstance *notificationServiceImpl) SendNotification(request model.N
 	var dispatchError error
 	switch newNotification.NotificationType {
 	case model.NotificationEmail:
-		dispatchError = serviceInstance.emailSender.SendEmail(newNotification.Recipient, newNotification.Subject, newNotification.Message)
+		dispatchError = serviceInstance.emailSender.SendEmail(ctx, newNotification.Recipient, newNotification.Subject, newNotification.Message)
 		if dispatchError == nil {
 			newNotification.Status = model.StatusSent
 			// When using SMTP no provider message ID is returned.
 		}
 	case model.NotificationSMS:
 		var providerMessageID string
-		providerMessageID, dispatchError = serviceInstance.smsSender.SendSms(newNotification.Recipient, newNotification.Message)
+		providerMessageID, dispatchError = serviceInstance.smsSender.SendSms(ctx, newNotification.Recipient, newNotification.Message)
 		if dispatchError == nil {
 			newNotification.Status = model.StatusSent
 			newNotification.ProviderMessageID = providerMessageID
@@ -96,19 +83,19 @@ func (serviceInstance *notificationServiceImpl) SendNotification(request model.N
 		serviceInstance.logger.Error("Immediate dispatch failed", "error", dispatchError)
 		newNotification.Status = model.StatusFailed
 	}
-	if err := model.CreateNotification(serviceInstance.database, &newNotification); err != nil {
+	if err := model.CreateNotification(ctx, serviceInstance.database, &newNotification); err != nil {
 		serviceInstance.logger.Error("Failed to store notification", "error", err)
 		return model.NotificationResponse{}, err
 	}
 	return model.NewNotificationResponse(newNotification), nil
 }
 
-func (serviceInstance *notificationServiceImpl) GetNotificationStatus(notificationID string) (model.NotificationResponse, error) {
+func (serviceInstance *notificationServiceImpl) GetNotificationStatus(ctx context.Context, notificationID string) (model.NotificationResponse, error) {
 	if notificationID == "" {
 		serviceInstance.logger.Error("Missing notification_id")
 		return model.NotificationResponse{}, fmt.Errorf("missing notification_id")
 	}
-	notificationRecord, retrievalError := model.MustGetNotificationByID(serviceInstance.database, notificationID)
+	notificationRecord, retrievalError := model.MustGetNotificationByID(ctx, serviceInstance.database, notificationID)
 	if retrievalError != nil {
 		serviceInstance.logger.Error("Failed to retrieve notification", "error", retrievalError)
 		return model.NotificationResponse{}, retrievalError
@@ -127,13 +114,13 @@ func (serviceInstance *notificationServiceImpl) StartRetryWorker(ctx context.Con
 			serviceInstance.logger.Info("Retry worker shutting down")
 			return
 		case <-retryTicker.C:
-			serviceInstance.processRetries()
+			serviceInstance.processRetries(ctx)
 		}
 	}
 }
 
-func (serviceInstance *notificationServiceImpl) processRetries() {
-	notificationRecords, fetchError := model.GetQueuedOrFailedNotifications(serviceInstance.database, serviceInstance.maxRetries)
+func (serviceInstance *notificationServiceImpl) processRetries(ctx context.Context) {
+	notificationRecords, fetchError := model.GetQueuedOrFailedNotifications(ctx, serviceInstance.database, serviceInstance.maxRetries)
 	if fetchError != nil {
 		serviceInstance.logger.Error("Failed to fetch notifications for retry", "error", fetchError)
 		return
@@ -151,14 +138,14 @@ func (serviceInstance *notificationServiceImpl) processRetries() {
 		var dispatchError error
 		switch notificationRecord.NotificationType {
 		case model.NotificationEmail:
-			dispatchError = serviceInstance.emailSender.SendEmail(notificationRecord.Recipient, notificationRecord.Subject, notificationRecord.Message)
+			dispatchError = serviceInstance.emailSender.SendEmail(ctx, notificationRecord.Recipient, notificationRecord.Subject, notificationRecord.Message)
 			if dispatchError == nil {
 				notificationRecord.Status = model.StatusSent
 				notificationRecord.ProviderMessageID = ""
 			}
 		case model.NotificationSMS:
 			var providerMessageID string
-			providerMessageID, dispatchError = serviceInstance.smsSender.SendSms(notificationRecord.Recipient, notificationRecord.Message)
+			providerMessageID, dispatchError = serviceInstance.smsSender.SendSms(ctx, notificationRecord.Recipient, notificationRecord.Message)
 			if dispatchError == nil {
 				notificationRecord.Status = model.StatusSent
 				notificationRecord.ProviderMessageID = providerMessageID
@@ -173,7 +160,7 @@ func (serviceInstance *notificationServiceImpl) processRetries() {
 		}
 		notificationRecord.RetryCount++
 		notificationRecord.LastAttemptedAt = currentTime
-		if saveError := model.SaveNotification(serviceInstance.database, &notificationRecord); saveError != nil {
+		if saveError := model.SaveNotification(ctx, serviceInstance.database, &notificationRecord); saveError != nil {
 			serviceInstance.logger.Error("Failed to update notification after retry", "notification_id", notificationRecord.NotificationID, "error", saveError)
 		}
 	}
