@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/temirov/notify/pkg/client"
-	"github.com/temirov/notify/pkg/config"
-	"github.com/temirov/notify/pkg/grpcapi"
+	"github.com/temirov/pinguin/pkg/client"
+	"github.com/temirov/pinguin/pkg/config"
+	"github.com/temirov/pinguin/pkg/grpcapi"
 	"log/slog"
 )
 

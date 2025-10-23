@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/temirov/notify/pkg/config"
+	"github.com/temirov/pinguin/pkg/config"
 	"log/slog"
 )
 

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/temirov/notify/pkg/config"
-	"github.com/temirov/notify/pkg/model"
+	"github.com/temirov/pinguin/pkg/config"
+	"github.com/temirov/pinguin/pkg/model"
 	"gorm.io/gorm"
 	"log/slog"
 )

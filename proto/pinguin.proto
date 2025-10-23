@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package notify;
+package pinguin;
 
-option go_package = "github.com/temirov/notify/pkg/grpcapi;grpcapi";
+option go_package = "github.com/temirov/pinguin/pkg/grpcapi;grpcapi";
 import "google/protobuf/timestamp.proto";
 
 // Enumeration for notification type.

@@ -13,7 +13,8 @@ In this file the entries (issues) record newly discovered requests or changes, w
 
 ## Maintenance
 
-- [ ] [PN-01] Rename the project to Pinguin: repo, folder, all text references, all code reference. The project should be called Pinguin
+- [x] [PN-01] Rename the project to Pinguin: repo, folder, all text references, all code reference. The project should be called Pinguin
+  - Resolved: Renamed the module, regenerated gRPC assets, retitled documentation, and updated binaries/tests to use the Pinguin identity.
 - [ ] [PN-02] Cover the project with tests. The code must be fully tested
 - [ ] [PN-03] Add GitHub action for code testing
 
