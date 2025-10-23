@@ -272,6 +272,47 @@ func TestSendNotificationValidatesRequiredFields(t *testing.T) {
 	}
 }
 
+func TestSendNotificationRejectsUnsupportedTypeForScheduledRequests(t *testing.T) {
+	t.Helper()
+
+	database := openIsolatedDatabase(t)
+	emailSender := &stubEmailSender{}
+	smsSender := &stubSmsSender{}
+
+	serviceInstance := &notificationServiceImpl{
+		database:         database,
+		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
+		emailSender:      emailSender,
+		smsSender:        smsSender,
+		maxRetries:       3,
+		retryIntervalSec: 1,
+	}
+
+	scheduledFor := time.Now().UTC().Add(5 * time.Minute)
+	_, sendError := serviceInstance.SendNotification(context.Background(), model.NotificationRequest{
+		NotificationType: model.NotificationType("push"),
+		Recipient:        "user@example.com",
+		Message:          "Body",
+		ScheduledFor:     &scheduledFor,
+	})
+
+	if sendError == nil {
+		t.Fatalf("expected unsupported type error")
+	}
+
+	if emailSender.callCount != 0 || smsSender.callCount != 0 {
+		t.Fatalf("unexpected dispatch attempts")
+	}
+
+	var notificationCount int64
+	if countError := database.WithContext(context.Background()).Model(&model.Notification{}).Count(&notificationCount).Error; countError != nil {
+		t.Fatalf("count notifications error: %v", countError)
+	}
+	if notificationCount != 0 {
+		t.Fatalf("expected zero stored notifications, got %d", notificationCount)
+	}
+}
+
 type stubEmailSender struct {
 	callCount int
 }
