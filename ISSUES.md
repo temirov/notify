@@ -18,7 +18,8 @@ In this file the entries (issues) record newly discovered requests or changes, w
 - [ ] [PN-02] Cover the project with tests. The code must be fully tested
 - [x] [PN-02] Cover the project with tests. The code must be fully tested
   - Resolved: Added configuration, persistence, service, and gRPC integration tests to exercise core behaviors with fakes and in-memory databases.
-- [ ] [PN-03] Add GitHub action for code testing
+- [x] [PN-03] Add GitHub action for code testing
+  - Resolved: Introduced a Go CI workflow executing gofmt checks, go vet, and go test for master pushes and pull requests.
 
   - Here is an example for inspiration:
 
