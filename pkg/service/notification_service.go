@@ -61,6 +61,14 @@ func (serviceInstance *notificationServiceImpl) SendNotification(ctx context.Con
 	newNotification := model.NewNotification(notificationID, request)
 
 	currentTime := time.Now().UTC()
+
+	switch newNotification.NotificationType {
+	case model.NotificationEmail, model.NotificationSMS:
+	default:
+		serviceInstance.logger.Error("Unsupported notification type", "type", newNotification.NotificationType)
+		return model.NotificationResponse{}, fmt.Errorf("unsupported notification type: %s", newNotification.NotificationType)
+	}
+
 	shouldAttemptImmediateSend := true
 	if request.ScheduledFor != nil && request.ScheduledFor.After(currentTime) {
 		shouldAttemptImmediateSend = false
