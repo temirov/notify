@@ -4,7 +4,8 @@ In this file the entries (issues) record newly discovered requests or changes, w
 
 ## Features
 
-- [ ] [PN-05] Add a scheduler to the API and the implementation, alowing to schedule when the notifications are sent
+- [x] [PN-05] Add a scheduler to the API and the implementation, alowing to schedule when the notifications are sent
+  - Resolved: Introduced optional gRPC `scheduled_time`, persisted scheduling metadata, updated workers, and added scheduling regression tests.
 
 ## Improvements
 
@@ -12,9 +13,12 @@ In this file the entries (issues) record newly discovered requests or changes, w
 
 ## Maintenance
 
-- [ ] [PN-01] Rename the project to Pinguin: repo, folder, all text references, all code reference. The project should be called Pinguin
-- [ ] [PN-02] Cover the project with tests. The code must be fully tested
-- [ ] [PN-03] Add GitHub action for code testing
+- [x] [PN-01] Rename the project to Pinguin: repo, folder, all text references, all code reference. The project should be called Pinguin
+  - Resolved: Renamed the module, regenerated gRPC assets, retitled documentation, and updated binaries/tests to use the Pinguin identity.
+- [x] [PN-02] Cover the project with tests. The code must be fully tested
+  - Resolved: Added configuration, persistence, service, and gRPC integration tests to exercise core behaviors with fakes and in-memory databases.
+- [x] [PN-03] Add GitHub action for code testing
+  - Resolved: Introduced a Go CI workflow executing gofmt checks, go vet, and go test for master pushes and pull requests.
 
   - Here is an example for inspiration:
 
@@ -60,7 +64,8 @@ In this file the entries (issues) record newly discovered requests or changes, w
 
   ```
 
-- [ ] [PN-04] Add GitHub action for building a docker container
+- [x] [PN-04] Add GitHub action for building a docker container
+  - Resolved: Added a multi-stage Dockerfile and CI workflow to publish the Pinguin server image to GHCR on master pushes.
 
   - Here is an example for inspiration
 

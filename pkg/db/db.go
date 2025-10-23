@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/temirov/notify/pkg/model"
+	"github.com/temirov/pinguin/pkg/model"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"

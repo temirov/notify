@@ -1,8 +1,8 @@
-# Notify
+# Pinguin
 
-Notify is a production‑quality notification service written in Go. It exposes a gRPC interface for sending **email** and **SMS** notifications. The service uses SQLite (via GORM) for persistent storage and runs a background worker to retry failed notifications using exponential backoff. Structured logging is provided using Go’s built‑in `slog` package.
+Pinguin is a production‑quality notification service written in Go. It exposes a gRPC interface for sending **email** and **SMS** notifications. The service uses SQLite (via GORM) for persistent storage and runs a background worker to retry failed notifications using exponential backoff. Structured logging is provided using Go’s built‑in `slog` package.
 
-> **Note:** This version of Notify is gRPC‑only; all interactions are via gRPC.
+> **Note:** This version of Pinguin is gRPC‑only; all interactions are via gRPC.
 
 ---
 
@@ -30,6 +30,9 @@ Notify is a production‑quality notification service written in Go. It exposes 
 - **Email and SMS Notifications:**  
   - **Email:** Delivered via SMTP using SendGrid’s settings (with fallback logic for recommended port usage).
   - **SMS:** Delivered using Twilio’s REST API.
+
+- **Scheduled Delivery:**  
+  Clients can provide an optional `scheduled_time` to defer dispatch until a specific timestamp. The background worker releases the notification when the scheduled time arrives.
 
 - **Persistent Storage:**  
   Uses SQLite with GORM to store notifications and track their statuses.
@@ -59,8 +62,8 @@ Notify is a production‑quality notification service written in Go. It exposes 
 Clone the repository and navigate to the project directory:
 
 ```bash
-git clone https://github.com/temirov/notify.git
-cd notify
+git clone https://github.com/temirov/pinguin.git
+cd pinguin
 ```
 
 Install dependencies:
@@ -69,17 +72,17 @@ Install dependencies:
 go mod tidy
 ```
 
-Build the Notify server:
+Build the Pinguin server:
 
 ```bash
-go build -o notify ./cmd/notify
+go build -o pinguin ./cmd/server
 ```
 
 ---
 
 ## Configuration
 
-Notify is configured via environment variables. Create a `.env` file or export the variables manually. Below is an explanation of each variable:
+Pinguin is configured via environment variables. Create a `.env` file or export the variables manually. Below is an explanation of each variable:
 
 - **DATABASE_PATH:**  
   Path to the SQLite database file (e.g., `app.db`).
@@ -148,10 +151,10 @@ export $(cat .env | xargs)
 
 ## Running the Server
 
-Start the Notify gRPC server by running the built executable:
+Start the Pinguin gRPC server by running the built executable:
 
 ```bash
-./notify
+./pinguin
 ```
 
 By default, the server listens on port `50051`. The server initializes the SQLite database, starts the background retry worker, and registers the gRPC NotificationService with bearer token authentication.
@@ -183,8 +186,9 @@ grpcurl -d '{
   "notification_type": "EMAIL",
   "recipient": "someone@example.com",
   "subject": "Test Email",
-  "message": "Hello from Notify!"
-}' -H "Authorization: Bearer my-secret-token" localhost:50051 notify.NotificationService/SendNotification
+  "message": "Hello from Pinguin!",
+  "scheduled_time": "2024-05-03T17:00:00Z"
+}' -H "Authorization: Bearer my-secret-token" localhost:50051 pinguin.NotificationService/SendNotification
 ```
 
 To retrieve the status of a notification (replace `<notification_id>` with the actual ID):
@@ -192,7 +196,7 @@ To retrieve the status of a notification (replace `<notification_id>` with the a
 ```bash
 grpcurl -d '{
   "notification_id": "<notification_id>"
-}' -H "Authorization: Bearer my-secret-token" localhost:50051 notify.NotificationService/GetNotificationStatus
+}' -H "Authorization: Bearer my-secret-token" localhost:50051 pinguin.NotificationService/GetNotificationStatus
 ```
 
 ---
@@ -200,7 +204,7 @@ grpcurl -d '{
 ## End-to-End Flow
 
 1. **Submission:**  
-   A client submits a notification (email or SMS) via gRPC using the `SendNotification` RPC. The notification is stored in the SQLite database with a status of `queued`.
+   A client submits a notification (email or SMS) via gRPC using the `SendNotification` RPC. The notification is stored in the SQLite database with a status of `queued`. If `scheduled_time` is in the future, the notification remains queued until the target time.
 
 2. **Immediate Dispatch:**  
    The server attempts to dispatch the notification immediately:
@@ -218,7 +222,7 @@ grpcurl -d '{
 ## Logging and Debugging
 
 - **Structured Logging:**  
-  Notify uses Go’s `slog` package for structured logging. Set the logging level via the `LOG_LEVEL` environment variable.
+  Pinguin uses Go’s `slog` package for structured logging. Set the logging level via the `LOG_LEVEL` environment variable.
 
 - **Debug Output:**  
   When `LOG_LEVEL` is set to `DEBUG`, detailed messages (including SMTP debug output and fallback warnings) are logged. Sensitive data (such as API keys) is masked in the logs.

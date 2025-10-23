@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/temirov/notify/pkg/config"
-	"github.com/temirov/notify/pkg/grpcapi"
+	"github.com/temirov/pinguin/pkg/config"
+	"github.com/temirov/pinguin/pkg/grpcapi"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"

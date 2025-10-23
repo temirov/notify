@@ -1,4 +1,4 @@
-module github.com/temirov/notify
+module github.com/temirov/pinguin
 
 go 1.25
 

@@ -1,0 +1,55 @@
+name: Go Tests
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'cmd/**'
+      - 'pkg/**'
+      - 'proto/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/go-tests.yml'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'cmd/**'
+      - 'pkg/**'
+      - 'proto/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/go-tests.yml'
+
+jobs:
+  verify:
+    name: Verify Go Project
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          check-latest: true
+          cache: true
+
+      - name: Verify formatting
+        run: |
+          set -euo pipefail
+          FORMAT_DIFF=$(timeout -k 350s -s SIGKILL 350s gofmt -l ./cmd ./pkg ./proto ./cmd/server ./cmd/client_test)
+          if [ -n "$FORMAT_DIFF" ]; then
+            echo "The following files require gofmt:" >&2
+            echo "$FORMAT_DIFF" >&2
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: timeout -k 350s -s SIGKILL 350s go vet ./...
+
+      - name: Run go test
+        run: timeout -k 350s -s SIGKILL 350s go test ./...
