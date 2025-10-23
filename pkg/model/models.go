@@ -37,6 +37,7 @@ type Notification struct {
 	Status            string           `json:"status"`
 	RetryCount        int              `json:"retry_count"`
 	LastAttemptedAt   time.Time        `json:"last_attempted_at"`
+	ScheduledFor      *time.Time       `json:"scheduled_for"`
 	CreatedAt         time.Time        `json:"created_at"`
 	UpdatedAt         time.Time        `json:"updated_at"`
 }
@@ -47,6 +48,7 @@ type NotificationRequest struct {
 	Recipient        string           `json:"recipient"`
 	Subject          string           `json:"subject,omitempty"`
 	Message          string           `json:"message"`
+	ScheduledFor     *time.Time       `json:"scheduled_for,omitempty"`
 }
 
 // NotificationResponse is what you'll return to the client.
@@ -60,6 +62,7 @@ type NotificationResponse struct {
 	Status            string           `json:"status"`
 	ProviderMessageID string           `json:"provider_message_id"`
 	RetryCount        int              `json:"retry_count"`
+	ScheduledFor      *time.Time       `json:"scheduled_for,omitempty"`
 	CreatedAt         time.Time        `json:"created_at"`
 	UpdatedAt         time.Time        `json:"updated_at"`
 }
@@ -67,6 +70,11 @@ type NotificationResponse struct {
 // NewNotification constructs a ready-to-insert DB Notification from a request, defaulting status=queued.
 func NewNotification(notificationID string, req NotificationRequest) Notification {
 	now := time.Now().UTC()
+	var scheduledFor *time.Time
+	if req.ScheduledFor != nil {
+		normalizedScheduled := req.ScheduledFor.UTC()
+		scheduledFor = &normalizedScheduled
+	}
 	return Notification{
 		NotificationID:   notificationID,
 		NotificationType: req.NotificationType,
@@ -74,6 +82,7 @@ func NewNotification(notificationID string, req NotificationRequest) Notificatio
 		Subject:          req.Subject,
 		Message:          req.Message,
 		Status:           StatusQueued,
+		ScheduledFor:     scheduledFor,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -81,6 +90,11 @@ func NewNotification(notificationID string, req NotificationRequest) Notificatio
 
 // NewNotificationResponse translates a DB Notification to a response shape.
 func NewNotificationResponse(n Notification) NotificationResponse {
+	var scheduledFor *time.Time
+	if n.ScheduledFor != nil {
+		normalizedScheduled := n.ScheduledFor.UTC()
+		scheduledFor = &normalizedScheduled
+	}
 	return NotificationResponse{
 		NotificationID:    n.NotificationID,
 		NotificationType:  n.NotificationType,
@@ -90,6 +104,7 @@ func NewNotificationResponse(n Notification) NotificationResponse {
 		Status:            n.Status,
 		ProviderMessageID: n.ProviderMessageID,
 		RetryCount:        n.RetryCount,
+		ScheduledFor:      scheduledFor,
 		CreatedAt:         n.CreatedAt,
 		UpdatedAt:         n.UpdatedAt,
 	}
@@ -114,11 +129,11 @@ func SaveNotification(ctx context.Context, db *gorm.DB, n *Notification) error {
 	return db.WithContext(ctx).Save(n).Error
 }
 
-func GetQueuedOrFailedNotifications(ctx context.Context, db *gorm.DB, maxRetries int) ([]Notification, error) {
+func GetQueuedOrFailedNotifications(ctx context.Context, db *gorm.DB, maxRetries int, currentTime time.Time) ([]Notification, error) {
 	var notifications []Notification
 	err := db.WithContext(ctx).
-		Where("(status = ? OR status = ?) AND retry_count < ?",
-			StatusQueued, StatusFailed, maxRetries).
+		Where("(status = ? OR status = ?) AND retry_count < ? AND (scheduled_for IS NULL OR scheduled_for <= ?)",
+			StatusQueued, StatusFailed, maxRetries, currentTime).
 		Find(&notifications).Error
 	if err != nil {
 		return nil, err

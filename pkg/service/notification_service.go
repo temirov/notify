@@ -60,29 +60,41 @@ func (serviceInstance *notificationServiceImpl) SendNotification(ctx context.Con
 	notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
 	newNotification := model.NewNotification(notificationID, request)
 
+	currentTime := time.Now().UTC()
+	shouldAttemptImmediateSend := true
+	if request.ScheduledFor != nil && request.ScheduledFor.After(currentTime) {
+		shouldAttemptImmediateSend = false
+	}
+
 	var dispatchError error
-	switch newNotification.NotificationType {
-	case model.NotificationEmail:
-		dispatchError = serviceInstance.emailSender.SendEmail(ctx, newNotification.Recipient, newNotification.Subject, newNotification.Message)
-		if dispatchError == nil {
-			newNotification.Status = model.StatusSent
-			// When using SMTP no provider message ID is returned.
+	if shouldAttemptImmediateSend {
+		switch newNotification.NotificationType {
+		case model.NotificationEmail:
+			dispatchError = serviceInstance.emailSender.SendEmail(ctx, newNotification.Recipient, newNotification.Subject, newNotification.Message)
+			if dispatchError == nil {
+				newNotification.Status = model.StatusSent
+				newNotification.LastAttemptedAt = currentTime
+				// When using SMTP no provider message ID is returned.
+			}
+		case model.NotificationSMS:
+			var providerMessageID string
+			providerMessageID, dispatchError = serviceInstance.smsSender.SendSms(ctx, newNotification.Recipient, newNotification.Message)
+			if dispatchError == nil {
+				newNotification.Status = model.StatusSent
+				newNotification.ProviderMessageID = providerMessageID
+				newNotification.LastAttemptedAt = currentTime
+			}
+		default:
+			serviceInstance.logger.Error("Unsupported notification type", "type", newNotification.NotificationType)
+			return model.NotificationResponse{}, fmt.Errorf("unsupported notification type: %s", newNotification.NotificationType)
 		}
-	case model.NotificationSMS:
-		var providerMessageID string
-		providerMessageID, dispatchError = serviceInstance.smsSender.SendSms(ctx, newNotification.Recipient, newNotification.Message)
-		if dispatchError == nil {
-			newNotification.Status = model.StatusSent
-			newNotification.ProviderMessageID = providerMessageID
+		if dispatchError != nil {
+			serviceInstance.logger.Error("Immediate dispatch failed", "error", dispatchError)
+			newNotification.Status = model.StatusFailed
+			newNotification.LastAttemptedAt = currentTime
 		}
-	default:
-		serviceInstance.logger.Error("Unsupported notification type", "type", newNotification.NotificationType)
-		return model.NotificationResponse{}, fmt.Errorf("unsupported notification type: %s", newNotification.NotificationType)
 	}
-	if dispatchError != nil {
-		serviceInstance.logger.Error("Immediate dispatch failed", "error", dispatchError)
-		newNotification.Status = model.StatusFailed
-	}
+
 	if err := model.CreateNotification(ctx, serviceInstance.database, &newNotification); err != nil {
 		serviceInstance.logger.Error("Failed to store notification", "error", err)
 		return model.NotificationResponse{}, err
@@ -120,13 +132,16 @@ func (serviceInstance *notificationServiceImpl) StartRetryWorker(ctx context.Con
 }
 
 func (serviceInstance *notificationServiceImpl) processRetries(ctx context.Context) {
-	notificationRecords, fetchError := model.GetQueuedOrFailedNotifications(ctx, serviceInstance.database, serviceInstance.maxRetries)
+	currentTime := time.Now().UTC()
+	notificationRecords, fetchError := model.GetQueuedOrFailedNotifications(ctx, serviceInstance.database, serviceInstance.maxRetries, currentTime)
 	if fetchError != nil {
 		serviceInstance.logger.Error("Failed to fetch notifications for retry", "error", fetchError)
 		return
 	}
-	currentTime := time.Now().UTC()
 	for _, notificationRecord := range notificationRecords {
+		if notificationRecord.ScheduledFor != nil && currentTime.Before(notificationRecord.ScheduledFor.UTC()) {
+			continue
+		}
 		// Apply exponential backoff: baseInterval * 2^(retry_count)
 		if notificationRecord.RetryCount > 0 {
 			backoffDuration := time.Duration(serviceInstance.retryIntervalSec) * time.Second * (1 << uint(notificationRecord.RetryCount))

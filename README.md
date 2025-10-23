@@ -31,6 +31,9 @@ Notify is a production‑quality notification service written in Go. It exposes 
   - **Email:** Delivered via SMTP using SendGrid’s settings (with fallback logic for recommended port usage).
   - **SMS:** Delivered using Twilio’s REST API.
 
+- **Scheduled Delivery:**  
+  Clients can provide an optional `scheduled_time` to defer dispatch until a specific timestamp. The background worker releases the notification when the scheduled time arrives.
+
 - **Persistent Storage:**  
   Uses SQLite with GORM to store notifications and track their statuses.
 
@@ -183,7 +186,8 @@ grpcurl -d '{
   "notification_type": "EMAIL",
   "recipient": "someone@example.com",
   "subject": "Test Email",
-  "message": "Hello from Notify!"
+  "message": "Hello from Notify!",
+  "scheduled_time": "2024-05-03T17:00:00Z"
 }' -H "Authorization: Bearer my-secret-token" localhost:50051 notify.NotificationService/SendNotification
 ```
 
@@ -200,7 +204,7 @@ grpcurl -d '{
 ## End-to-End Flow
 
 1. **Submission:**  
-   A client submits a notification (email or SMS) via gRPC using the `SendNotification` RPC. The notification is stored in the SQLite database with a status of `queued`.
+   A client submits a notification (email or SMS) via gRPC using the `SendNotification` RPC. The notification is stored in the SQLite database with a status of `queued`. If `scheduled_time` is in the future, the notification remains queued until the target time.
 
 2. **Immediate Dispatch:**  
    The server attempts to dispatch the notification immediately:

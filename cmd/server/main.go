@@ -16,6 +16,7 @@ import (
 	"github.com/temirov/notify/pkg/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"log/slog"
 )
 
@@ -38,11 +39,18 @@ func (server *notificationServiceServer) SendNotification(ctx context.Context, r
 		return nil, fmt.Errorf("unsupported notification type: %v", req.NotificationType)
 	}
 
+	var scheduledFor *time.Time
+	if req.ScheduledTime != nil {
+		normalizedScheduled := req.ScheduledTime.AsTime().UTC()
+		scheduledFor = &normalizedScheduled
+	}
+
 	modelRequest := model.NotificationRequest{
 		NotificationType: internalType,
 		Recipient:        req.Recipient,
 		Subject:          req.Subject,
 		Message:          req.Message,
+		ScheduledFor:     scheduledFor,
 	}
 
 	modelResponse, err := server.notificationService.SendNotification(ctx, modelRequest)
@@ -92,6 +100,11 @@ func mapModelToGrpcResponse(modelResp model.NotificationResponse) *grpcapi.Notif
 		grpcStatus = grpcapi.Status_UNKNOWN
 	}
 
+	var scheduledTime *timestamppb.Timestamp
+	if modelResp.ScheduledFor != nil {
+		scheduledTime = timestamppb.New(modelResp.ScheduledFor.UTC())
+	}
+
 	return &grpcapi.NotificationResponse{
 		NotificationId:    modelResp.NotificationID,
 		NotificationType:  grpcNotifType,
@@ -103,6 +116,7 @@ func mapModelToGrpcResponse(modelResp model.NotificationResponse) *grpcapi.Notif
 		RetryCount:        int32(modelResp.RetryCount),
 		CreatedAt:         modelResp.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:         modelResp.UpdatedAt.Format(time.RFC3339),
+		ScheduledTime:     scheduledTime,
 	}
 }
 

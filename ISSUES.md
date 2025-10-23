@@ -4,7 +4,8 @@ In this file the entries (issues) record newly discovered requests or changes, w
 
 ## Features
 
-- [ ] [PN-05] Add a scheduler to the API and the implementation, alowing to schedule when the notifications are sent
+- [x] [PN-05] Add a scheduler to the API and the implementation, alowing to schedule when the notifications are sent
+  - Resolved: Introduced optional gRPC `scheduled_time`, persisted scheduling metadata, updated workers, and added scheduling regression tests.
 
 ## Improvements
 
