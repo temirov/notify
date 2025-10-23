@@ -15,7 +15,9 @@ import (
 	"github.com/temirov/pinguin/pkg/model"
 	"github.com/temirov/pinguin/pkg/service"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"log/slog"
 )
@@ -41,6 +43,10 @@ func (server *notificationServiceServer) SendNotification(ctx context.Context, r
 
 	var scheduledFor *time.Time
 	if req.ScheduledTime != nil {
+		if err := req.ScheduledTime.CheckValid(); err != nil {
+			server.logger.Error("Invalid scheduled timestamp", "error", err)
+			return nil, status.Errorf(codes.InvalidArgument, "invalid scheduled_time: %v", err)
+		}
 		normalizedScheduled := req.ScheduledTime.AsTime().UTC()
 		scheduledFor = &normalizedScheduled
 	}

@@ -100,6 +100,75 @@ func TestSendNotificationRespectsSchedule(t *testing.T) {
 	}
 }
 
+func TestSendNotificationRejectsUnsupportedTypes(t *testing.T) {
+	t.Helper()
+
+	testCases := []struct {
+		name            string
+		scheduledOffset *time.Duration
+	}{
+		{
+			name:            "ImmediateUnsupportedType",
+			scheduledOffset: nil,
+		},
+		{
+			name:            "ScheduledUnsupportedType",
+			scheduledOffset: durationPointer(2 * time.Minute),
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Helper()
+
+			database := openIsolatedDatabase(t)
+			emailSender := &stubEmailSender{}
+			smsSender := &stubSmsSender{}
+
+			serviceInstance := &notificationServiceImpl{
+				database:         database,
+				logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
+				emailSender:      emailSender,
+				smsSender:        smsSender,
+				maxRetries:       5,
+				retryIntervalSec: 1,
+			}
+
+			var scheduledFor *time.Time
+			if testCase.scheduledOffset != nil {
+				scheduledTime := time.Now().UTC().Add(*testCase.scheduledOffset)
+				scheduledFor = &scheduledTime
+			}
+
+			_, responseError := serviceInstance.SendNotification(context.Background(), model.NotificationRequest{
+				NotificationType: model.NotificationType("push"),
+				Recipient:        "user@example.com",
+				Subject:          "Subject",
+				Message:          "Body",
+				ScheduledFor:     scheduledFor,
+			})
+			if responseError == nil {
+				t.Fatalf("expected unsupported type error")
+			}
+
+			if emailSender.callCount != 0 {
+				t.Fatalf("unexpected email dispatch attempts")
+			}
+			if smsSender.callCount != 0 {
+				t.Fatalf("unexpected sms dispatch attempts")
+			}
+
+			pendingNotifications, pendingError := model.GetQueuedOrFailedNotifications(context.Background(), database, 5, time.Now().UTC())
+			if pendingError != nil {
+				t.Fatalf("pending notifications error: %v", pendingError)
+			}
+			if len(pendingNotifications) != 0 {
+				t.Fatalf("unexpected stored notifications")
+			}
+		})
+	}
+}
+
 func TestProcessRetriesRespectsSchedule(t *testing.T) {
 	t.Helper()
 

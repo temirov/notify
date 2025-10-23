@@ -14,7 +14,10 @@ import (
 	"github.com/temirov/pinguin/pkg/model"
 	"github.com/temirov/pinguin/pkg/service"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"log/slog"
 )
 
@@ -99,6 +102,32 @@ func TestNotificationServerHandlesClientRequests(t *testing.T) {
 	}
 	if len(notificationService.statusCalls) == 0 {
 		t.Fatalf("expected status calls")
+	}
+}
+
+func TestSendNotificationRejectsInvalidScheduledTimestamp(t *testing.T) {
+	t.Helper()
+
+	invalidTimestamp := &timestamppb.Timestamp{Seconds: 1, Nanos: 1_000_000_000}
+
+	notificationService := &stubNotificationService{}
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+	server := &notificationServiceServer{notificationService: notificationService, logger: logger}
+
+	_, sendError := server.SendNotification(context.Background(), &grpcapi.NotificationRequest{
+		NotificationType: grpcapi.NotificationType_EMAIL,
+		Recipient:        "user@example.com",
+		Message:          "Hello",
+		ScheduledTime:    invalidTimestamp,
+	})
+	if sendError == nil {
+		t.Fatalf("expected validation error")
+	}
+	if status.Code(sendError) != codes.InvalidArgument {
+		t.Fatalf("unexpected status code %v", status.Code(sendError))
+	}
+	if len(notificationService.sendCalls) != 0 {
+		t.Fatalf("unexpected service invocation")
 	}
 }
 

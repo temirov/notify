@@ -60,6 +60,13 @@ func (serviceInstance *notificationServiceImpl) SendNotification(ctx context.Con
 	notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
 	newNotification := model.NewNotification(notificationID, request)
 
+	switch newNotification.NotificationType {
+	case model.NotificationEmail, model.NotificationSMS:
+	default:
+		serviceInstance.logger.Error("Unsupported notification type", "type", newNotification.NotificationType)
+		return model.NotificationResponse{}, fmt.Errorf("unsupported notification type: %s", newNotification.NotificationType)
+	}
+
 	currentTime := time.Now().UTC()
 	shouldAttemptImmediateSend := true
 	if request.ScheduledFor != nil && request.ScheduledFor.After(currentTime) {
@@ -84,9 +91,6 @@ func (serviceInstance *notificationServiceImpl) SendNotification(ctx context.Con
 				newNotification.ProviderMessageID = providerMessageID
 				newNotification.LastAttemptedAt = currentTime
 			}
-		default:
-			serviceInstance.logger.Error("Unsupported notification type", "type", newNotification.NotificationType)
-			return model.NotificationResponse{}, fmt.Errorf("unsupported notification type: %s", newNotification.NotificationType)
 		}
 		if dispatchError != nil {
 			serviceInstance.logger.Error("Immediate dispatch failed", "error", dispatchError)
