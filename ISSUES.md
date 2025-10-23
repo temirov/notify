@@ -65,7 +65,8 @@ In this file the entries (issues) record newly discovered requests or changes, w
 
   ```
 
-- [ ] [PN-04] Add GitHub action for building a docker container
+- [x] [PN-04] Add GitHub action for building a docker container
+  - Resolved: Added a multi-stage Dockerfile and CI workflow to publish the Pinguin server image to GHCR on master pushes.
 
   - Here is an example for inspiration
 
