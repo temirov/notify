@@ -168,6 +168,41 @@ func TestProcessRetriesRespectsSchedule(t *testing.T) {
 	}
 }
 
+func TestSendNotificationValidatesRequiredFields(t *testing.T) {
+	t.Helper()
+
+	database := openIsolatedDatabase(t)
+	emailSender := &stubEmailSender{}
+	smsSender := &stubSmsSender{}
+
+	serviceInstance := &notificationServiceImpl{
+		database:         database,
+		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
+		emailSender:      emailSender,
+		smsSender:        smsSender,
+		maxRetries:       3,
+		retryIntervalSec: 1,
+	}
+
+	_, sendError := serviceInstance.SendNotification(context.Background(), model.NotificationRequest{
+		NotificationType: model.NotificationSMS,
+		Recipient:        "",
+		Message:          "Body",
+	})
+	if sendError == nil {
+		t.Fatalf("expected validation error")
+	}
+
+	_, fetchError := model.GetQueuedOrFailedNotifications(context.Background(), database, 3, time.Now().UTC())
+	if fetchError != nil {
+		t.Fatalf("fetch pending error: %v", fetchError)
+	}
+
+	if emailSender.callCount != 0 || smsSender.callCount != 0 {
+		t.Fatalf("unexpected dispatch attempts")
+	}
+}
+
 type stubEmailSender struct {
 	callCount int
 }
