@@ -134,6 +134,7 @@ In this file the entries (issues) record newly discovered requests or changes, w
      ```
   ````
 
-- [ ] [PN-10] Refactor the code so that the code meant as internal structure of packages is under internal/ and the code emant to be shared with other programs is under pkg/
+- [x] [PN-10] Refactor the code so that the code meant as internal structure of packages is under internal/ and the code emant to be shared with other programs is under pkg/
+  - Resolved: Moved server-only config, db, model, and service packages under `internal/`, updated imports, and verified tests + vet across the tree.
 
 ## Planning (do not work on these, not ready)

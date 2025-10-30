@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/temirov/pinguin/internal/model"
+	"github.com/temirov/pinguin/internal/service"
 	"github.com/temirov/pinguin/pkg/client"
 	"github.com/temirov/pinguin/pkg/grpcapi"
-	"github.com/temirov/pinguin/pkg/model"
-	"github.com/temirov/pinguin/pkg/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
