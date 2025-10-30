@@ -24,14 +24,15 @@ In this file the entries (issues) record newly discovered requests or changes, w
 
 - [x] [PN-06] Remove all and any mentioning, coding references or logic related to Sendgrid. The service is intended to be the required email integration with email providers, and not a middleman for other services.
   - Resolved: Renamed the email sender and configuration to provider-agnostic SMTP equivalents, updated env variables/tests, and refreshed documentation to eliminate SendGrid-specific language.
-- [ ] [PN-13] Fix the code so that there are no multiple entries:
-   ```
-   13:41:53 tyemirov@computercat:~/Development/pinguin [master] $ go run ./...
-   go: pattern ./... matches multiple packages:
+- [x] [PN-13] Fix the code so that there are no multiple entries:
+  ```
+  13:41:53 tyemirov@computercat:~/Development/pinguin [master] $ go run ./...
+  go: pattern ./... matches multiple packages:
          github.com/temirov/pinguin/clients/cli
          github.com/temirov/pinguin/cmd/client_test
          github.com/temirov/pinguin/cmd/server
-   ```
+  ```
+  - Resolved: Split the CLI and sample client into their own modules so root `go run ./...` targets only the server while dedicated commands still run locally.
 
 ## Maintenance
 

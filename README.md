@@ -162,6 +162,14 @@ Start the Pinguin gRPC server by running the built executable:
 ./pinguin
 ```
 
+During development you can also execute it directly without building first:
+
+```bash
+go run ./cmd/server
+# or simply
+go run ./...
+```
+
 By default, the server listens on port `50051`. The server initializes the SQLite database, starts the background retry worker, and registers the gRPC NotificationService with bearer token authentication.
 
 ---
@@ -170,12 +178,13 @@ By default, the server listens on port `50051`. The server initializes the SQLit
 
 ### Pinguin CLI
 
-The repository includes an interactive CLI at `clients/cli` built with Cobra and Viper. It sends email or SMS notifications and supports scheduled delivery.
-
-Build the binary:
+The repository includes an interactive CLI at `clients/cli` built with Cobra and Viper. It lives in its own Go module so you can work on the server without pulling in extra binaries. To build or run it, switch into the module first:
 
 ```bash
-go build -o pinguin-cli ./clients/cli
+cd clients/cli
+go build -o pinguin-cli .
+# or run directly
+go run . send --help
 ```
 
 Configuration values are read from environment variables prefixed with `PINGUIN_`:
@@ -202,10 +211,11 @@ PINGUIN_GRPC_AUTH_TOKEN=my-secret-token \
 
 ### Command‑Line Client Test
 
-A lightweight client test application is available under `cmd/client_test/main.go`. This client wraps the gRPC calls and demonstrates sending a notification. To run the client test, use:
+A lightweight client test application is available under `cmd/client_test`, also as its own Go module. This client wraps the gRPC calls and demonstrates sending a notification. To run the client test, use:
 
 ```bash
-go run cmd/client_test/main.go --to your-email@yourdomain.com --subject "Test Email" --message "Hello, world!"
+cd cmd/client_test
+go run . --to your-email@yourdomain.com --subject "Test Email" --message "Hello, world!"
 ```
 
 If successful, you will see output similar to:

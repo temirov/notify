@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - 'cmd/**'
+      - 'clients/**'
       - 'pkg/**'
       - 'proto/**'
       - 'go.mod'
@@ -41,7 +42,7 @@ jobs:
       - name: Verify formatting
         run: |
           set -euo pipefail
-          FORMAT_DIFF=$(timeout -k 350s -s SIGKILL 350s gofmt -l ./cmd ./pkg ./proto ./cmd/server ./cmd/client_test)
+          FORMAT_DIFF=$(timeout -k 350s -s SIGKILL 350s gofmt -l ./cmd ./pkg ./proto ./clients/cli ./cmd/client_test)
           if [ -n "$FORMAT_DIFF" ]; then
             echo "The following files require gofmt:" >&2
             echo "$FORMAT_DIFF" >&2
@@ -52,4 +53,20 @@ jobs:
         run: timeout -k 350s -s SIGKILL 350s go vet ./...
 
       - name: Run go test
+        run: timeout -k 350s -s SIGKILL 350s go test ./...
+
+      - name: Run go vet (clients/cli)
+        working-directory: clients/cli
+        run: timeout -k 350s -s SIGKILL 350s go vet ./...
+
+      - name: Run go test (clients/cli)
+        working-directory: clients/cli
+        run: timeout -k 350s -s SIGKILL 350s go test ./...
+
+      - name: Run go vet (cmd/client_test)
+        working-directory: cmd/client_test
+        run: timeout -k 350s -s SIGKILL 350s go vet ./...
+
+      - name: Run go test (cmd/client_test)
+        working-directory: cmd/client_test
         run: timeout -k 350s -s SIGKILL 350s go test ./...
