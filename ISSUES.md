@@ -17,20 +17,22 @@ In this file the entries (issues) record newly discovered requests or changes, w
   - Resolved: Treated Twilio credentials as optional, logged the disabled state at startup, and prevented SMS dispatch/retries when configuration is incomplete.
 - [x] [PN-11] Add generate-secret command to the CLI that generates sufficiently long secret string suited to be used as NOTIFICATION_AUTH_TOKEN. Keep the logic of the key generation in /pkg so that it could be later refactored into a shared package.
   - Resolved: Added pkg/secret crypto generator with length guards, wired `generate-secret` CLI command, and covered success/error flows with tests and documentation.
-- [ ] [PN-12] Remove generate-secret command and all associated files and document the usage of built in tools (openssl rand -base64 32) to get the strong secret key
+- [x] [PN-12] Remove generate-secret command and all associated files and document the usage of built in tools (openssl rand -base64 32) to get the strong secret key
+  - Resolved: Deleted the CLI secret generator and related package, and updated README guidance to use `openssl rand -base64 32` for token creation.
 
 ## BugFixes
 
 - [x] [PN-06] Remove all and any mentioning, coding references or logic related to Sendgrid. The service is intended to be the required email integration with email providers, and not a middleman for other services.
   - Resolved: Renamed the email sender and configuration to provider-agnostic SMTP equivalents, updated env variables/tests, and refreshed documentation to eliminate SendGrid-specific language.
-- [ ] [PN-13] Fix the code so that there are no multiple entries:
-   ```
-   13:41:53 tyemirov@computercat:~/Development/pinguin [master] $ go run ./...
-   go: pattern ./... matches multiple packages:
+- [x] [PN-13] Fix the code so that there are no multiple entries:
+  ```
+  13:41:53 tyemirov@computercat:~/Development/pinguin [master] $ go run ./...
+  go: pattern ./... matches multiple packages:
          github.com/temirov/pinguin/clients/cli
          github.com/temirov/pinguin/cmd/client_test
          github.com/temirov/pinguin/cmd/server
-   ```
+  ```
+  - Resolved: Split the CLI and sample client into their own modules so root `go run ./...` targets only the server while dedicated commands still run locally.
 
 ## Maintenance
 
@@ -145,13 +147,14 @@ In this file the entries (issues) record newly discovered requests or changes, w
 
 - [x] [PN-10] Refactor the code so that the code meant as internal structure of packages is under internal/ and the code emant to be shared with other programs is under pkg/
   - Resolved: Moved server-only config, db, model, and service packages under `internal/`, updated imports, and verified tests + vet across the tree.
-- [ ] [PN-14] The app failes to start with the message of missing variables but the readme doesnt mention them in the .env section. Add all missing variables to the README.md with the explanation of their meaning and suggested values
-```
-pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="configuration errors: missing environment variable OPERATION_TIMEOUT_SEC"
-pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="missing environment variable CONNECTION_TIMEOUT_SEC"
-pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="missing environment variable RETRY_INTERVAL_SEC"
-pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="missing environment variable GRPC_AUTH_TOKEN"
-pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="missing environment variable MAX_RETRIES"
-```
+- [x] [PN-14] The app failes to start with the message of missing variables but the readme doesnt mention them in the .env section. Add all missing variables to the README.md with the explanation of their meaning and suggested values
+  ```
+  pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="configuration errors: missing environment variable OPERATION_TIMEOUT_SEC"
+  pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="missing environment variable CONNECTION_TIMEOUT_SEC"
+  pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="missing environment variable RETRY_INTERVAL_SEC"
+  pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="missing environment variable GRPC_AUTH_TOKEN"
+  pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="missing environment variable MAX_RETRIES"
+  ```
+  - Resolved: Updated README and the sample `.env` to enumerate every required variable (including GRPC and timeout settings) with recommended defaults.
 
 ## Planning (do not work on these, not ready)

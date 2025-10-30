@@ -90,8 +90,15 @@ Pinguin is configured via environment variables. Create a `.env` file or export 
 - **LOG_LEVEL:**  
   Logging level. Possible values: `DEBUG`, `INFO`, `WARN`, `ERROR`.
 
-- **NOTIFICATION_AUTH_TOKEN:**  
-  Bearer token used for authenticating gRPC requests. All clients must supply this token.
+- **GRPC_AUTH_TOKEN:**  
+  Bearer token used for authenticating gRPC requests. All clients must supply this token.  
+  Generate a value with `openssl rand -base64 32` (or an equivalent secure random command) and store it in a password manager.
+
+- **CONNECTION_TIMEOUT_SEC:**  
+  Number of seconds to wait when establishing outbound SMTP/Twilio connections. A value of `5` seconds works well for most deployments.
+
+- **OPERATION_TIMEOUT_SEC:**  
+  Maximum number of seconds to wait for a send attempt before treating it as failed. Set this to `30` seconds unless your provider requires longer operations.
 
 - **MAX_RETRIES:**  
   Maximum number of times the background worker will retry sending a failed notification.
@@ -130,7 +137,11 @@ Example `.env` file:
 ```bash
 DATABASE_PATH=app.db
 LOG_LEVEL=DEBUG
-NOTIFICATION_AUTH_TOKEN=my-secret-token
+GRPC_AUTH_TOKEN=my-secret-token
+MAX_RETRIES=3
+RETRY_INTERVAL_SEC=30
+CONNECTION_TIMEOUT_SEC=5
+OPERATION_TIMEOUT_SEC=30
 
 SMTP_USERNAME=apikey
 SMTP_PASSWORD=super-secret-password
@@ -161,6 +172,14 @@ Start the Pinguin gRPC server by running the built executable:
 ./pinguin
 ```
 
+During development you can also execute it directly without building first:
+
+```bash
+go run ./cmd/server
+# or simply
+go run ./...
+```
+
 By default, the server listens on port `50051`. The server initializes the SQLite database, starts the background retry worker, and registers the gRPC NotificationService with bearer token authentication.
 
 ---
@@ -169,12 +188,13 @@ By default, the server listens on port `50051`. The server initializes the SQLit
 
 ### Pinguin CLI
 
-The repository includes an interactive CLI at `clients/cli` built with Cobra and Viper. It sends email or SMS notifications and supports scheduled delivery.
-
-Build the binary:
+The repository includes an interactive CLI at `clients/cli` built with Cobra and Viper. It lives in its own Go module so you can work on the server without pulling in extra binaries. To build or run it, switch into the module first:
 
 ```bash
-go build -o pinguin-cli ./clients/cli
+cd clients/cli
+go build -o pinguin-cli .
+# or run directly
+go run . send --help
 ```
 
 Configuration values are read from environment variables prefixed with `PINGUIN_`:
@@ -199,22 +219,13 @@ PINGUIN_GRPC_AUTH_TOKEN=my-secret-token \
   --scheduled-time "2025-01-02T15:04:05Z"
 ```
 
-#### Generate Authentication Secret
-
-The CLI can generate a strong bearer token for `NOTIFICATION_AUTH_TOKEN`:
-
-```bash
-./pinguin-cli generate-secret --bytes 48
-```
-
-Omit `--bytes` to use the default 48-byte entropy source (64 URL-safe characters). Larger values are accepted as long as they exceed the 32-byte minimum.
-
 ### Command‑Line Client Test
 
-A lightweight client test application is available under `cmd/client_test/main.go`. This client wraps the gRPC calls and demonstrates sending a notification. To run the client test, use:
+A lightweight client test application is available under `cmd/client_test`, also as its own Go module. This client wraps the gRPC calls and demonstrates sending a notification. To run the client test, use:
 
 ```bash
-go run cmd/client_test/main.go --to your-email@yourdomain.com --subject "Test Email" --message "Hello, world!"
+cd cmd/client_test
+go run . --to your-email@yourdomain.com --subject "Test Email" --message "Hello, world!"
 ```
 
 If successful, you will see output similar to:
