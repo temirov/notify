@@ -141,6 +141,8 @@ TWILIO_AUTH_TOKEN=yyyyyyyyyyyyyy
 TWILIO_FROM_NUMBER=+12015550123
 ```
 
+For a deeper walkthrough of the SMTP delivery pipeline, see [`docs/smtp_delivery_plan.md`](docs/smtp_delivery_plan.md).
+
 Load the environment variables:
 
 ```bash
