@@ -9,7 +9,11 @@ In this file the entries (issues) record newly discovered requests or changes, w
 
 ## Improvements
 
+- [ ] [PN-07] Remove all and any mentioning of Sendgrid . Replace it with our own implementation of sending emails to the desination emails. Build a detailed plan of sending emails using SMTP protocol.
+
 ## BugFixes
+
+- [ ] [PN-06] Remove all and any mentioning, coding references or logic related to Sendgrid. The service is intended to be the required email integration with email providers, and not a middleman for other services.
 
 ## Maintenance
 
