@@ -123,6 +123,8 @@ Pinguin is configured via environment variables. Create a `.env` file or export 
 - **TWILIO_FROM_NUMBER:**  
   The phone number (in E.164 format) from which SMS messages are sent.
 
+  When any of the Twilio variables are omitted, the server starts with SMS delivery disabled and logs a warning that text notifications are unavailable.
+
 Example `.env` file:
 
 ```bash

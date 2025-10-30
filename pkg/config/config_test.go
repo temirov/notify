@@ -37,6 +37,7 @@ func TestLoadConfig(t *testing.T) {
 		expectError    bool
 		errorSubstring string
 		expectedConfig Config
+		assert         func(t *testing.T, cfg Config)
 	}{
 		{
 			name: "AllVariablesPresent",
@@ -60,6 +61,12 @@ func TestLoadConfig(t *testing.T) {
 				ConnectionTimeoutSec: 3,
 				OperationTimeoutSec:  7,
 			},
+			assert: func(t *testing.T, cfg Config) {
+				t.Helper()
+				if !cfg.TwilioConfigured() {
+					t.Fatalf("expected Twilio to be configured")
+				}
+			},
 		},
 		{
 			name: "MissingVariable",
@@ -79,6 +86,39 @@ func TestLoadConfig(t *testing.T) {
 			},
 			expectError:    true,
 			errorSubstring: "invalid integer for MAX_RETRIES",
+		},
+		{
+			name: "TwilioCredentialsOptional",
+			mutateEnv: func(t *testing.T) {
+				var trimmed []envEntry
+				for _, entry := range completeEnvironment {
+					if strings.HasPrefix(entry.key, "TWILIO_") {
+						continue
+					}
+					trimmed = append(trimmed, entry)
+				}
+				setEnvironment(t, trimmed)
+			},
+			expectedConfig: Config{
+				DatabasePath:         "test.db",
+				GRPCAuthToken:        "unit-token",
+				LogLevel:             "INFO",
+				MaxRetries:           5,
+				RetryIntervalSec:     4,
+				SMTPUsername:         "apikey",
+				SMTPPassword:         "secret",
+				SMTPHost:             "smtp.test",
+				SMTPPort:             587,
+				FromEmail:            "noreply@test",
+				ConnectionTimeoutSec: 3,
+				OperationTimeoutSec:  7,
+			},
+			assert: func(t *testing.T, cfg Config) {
+				t.Helper()
+				if cfg.TwilioConfigured() {
+					t.Fatalf("expected Twilio to be disabled")
+				}
+			},
 		},
 	}
 
@@ -104,6 +144,10 @@ func TestLoadConfig(t *testing.T) {
 
 			if loadedConfig != testCase.expectedConfig {
 				t.Fatalf("unexpected config %+v", loadedConfig)
+			}
+
+			if testCase.assert != nil {
+				testCase.assert(t, loadedConfig)
 			}
 		})
 	}

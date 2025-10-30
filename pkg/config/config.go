@@ -46,9 +46,6 @@ func LoadConfig() (Config, error) {
 		loadEnvString("SMTP_HOST", &configuration.SMTPHost),
 		loadEnvInt("SMTP_PORT", &configuration.SMTPPort),
 		loadEnvString("FROM_EMAIL", &configuration.FromEmail),
-		loadEnvString("TWILIO_ACCOUNT_SID", &configuration.TwilioAccountSID),
-		loadEnvString("TWILIO_AUTH_TOKEN", &configuration.TwilioAuthToken),
-		loadEnvString("TWILIO_FROM_NUMBER", &configuration.TwilioFromNumber),
 		loadEnvInt("CONNECTION_TIMEOUT_SEC", &configuration.ConnectionTimeoutSec),
 		loadEnvInt("OPERATION_TIMEOUT_SEC", &configuration.OperationTimeoutSec),
 	}
@@ -74,6 +71,11 @@ func LoadConfig() (Config, error) {
 	if len(errorMessages) > 0 {
 		return Config{}, fmt.Errorf("configuration errors: %s", strings.Join(errorMessages, ", "))
 	}
+
+	configuration.TwilioAccountSID = strings.TrimSpace(os.Getenv("TWILIO_ACCOUNT_SID"))
+	configuration.TwilioAuthToken = strings.TrimSpace(os.Getenv("TWILIO_AUTH_TOKEN"))
+	configuration.TwilioFromNumber = strings.TrimSpace(os.Getenv("TWILIO_FROM_NUMBER"))
+
 	return configuration, nil
 }
 
@@ -104,4 +106,8 @@ func loadEnvInt(environmentKey string, destination *int) func() error {
 		*destination = parsedInteger
 		return nil
 	}
+}
+
+func (configuration Config) TwilioConfigured() bool {
+	return configuration.TwilioAccountSID != "" && configuration.TwilioAuthToken != "" && configuration.TwilioFromNumber != ""
 }

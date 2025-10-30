@@ -56,6 +56,7 @@ func TestSendNotificationRespectsSchedule(t *testing.T) {
 				smsSender:        smsSender,
 				maxRetries:       5,
 				retryIntervalSec: 1,
+				smsEnabled:       true,
 			}
 
 			var scheduledFor *time.Time
@@ -132,6 +133,7 @@ func TestSendNotificationRejectsUnsupportedTypes(t *testing.T) {
 				smsSender:        smsSender,
 				maxRetries:       5,
 				retryIntervalSec: 1,
+				smsEnabled:       true,
 			}
 
 			var scheduledFor *time.Time
@@ -183,6 +185,7 @@ func TestProcessRetriesRespectsSchedule(t *testing.T) {
 		smsSender:        smsSender,
 		maxRetries:       5,
 		retryIntervalSec: 1,
+		smsEnabled:       true,
 	}
 
 	notificationIdentifier := "notif-scheduled"
@@ -251,6 +254,7 @@ func TestSendNotificationValidatesRequiredFields(t *testing.T) {
 		smsSender:        smsSender,
 		maxRetries:       3,
 		retryIntervalSec: 1,
+		smsEnabled:       true,
 	}
 
 	_, sendError := serviceInstance.SendNotification(context.Background(), model.NotificationRequest{
@@ -286,6 +290,7 @@ func TestSendNotificationRejectsUnsupportedTypeForScheduledRequests(t *testing.T
 		smsSender:        smsSender,
 		maxRetries:       3,
 		retryIntervalSec: 1,
+		smsEnabled:       true,
 	}
 
 	scheduledFor := time.Now().UTC().Add(5 * time.Minute)
@@ -310,6 +315,91 @@ func TestSendNotificationRejectsUnsupportedTypeForScheduledRequests(t *testing.T
 	}
 	if notificationCount != 0 {
 		t.Fatalf("expected zero stored notifications, got %d", notificationCount)
+	}
+}
+
+func TestSendNotificationRejectsSmsWhenSenderDisabled(t *testing.T) {
+	t.Helper()
+
+	database := openIsolatedDatabase(t)
+	serviceInstance := &notificationServiceImpl{
+		database:         database,
+		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
+		emailSender:      &stubEmailSender{},
+		smsSender:        nil,
+		maxRetries:       3,
+		retryIntervalSec: 1,
+		smsEnabled:       false,
+	}
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			t.Fatalf("unexpected panic when sms sender disabled: %v", recovered)
+		}
+	}()
+
+	_, sendError := serviceInstance.SendNotification(context.Background(), model.NotificationRequest{
+		NotificationType: model.NotificationSMS,
+		Recipient:        "+15555555555",
+		Message:          "Body",
+	})
+	if sendError == nil {
+		t.Fatalf("expected error when sms sender is disabled")
+	}
+
+	var notificationCount int64
+	if countError := database.WithContext(context.Background()).Model(&model.Notification{}).Count(&notificationCount).Error; countError != nil {
+		t.Fatalf("count notifications error: %v", countError)
+	}
+	if notificationCount != 0 {
+		t.Fatalf("expected zero notifications stored, got %d", notificationCount)
+	}
+}
+
+func TestProcessRetriesFailsSmsWhenSenderDisabled(t *testing.T) {
+	t.Helper()
+
+	database := openIsolatedDatabase(t)
+	serviceInstance := &notificationServiceImpl{
+		database:         database,
+		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
+		emailSender:      &stubEmailSender{},
+		smsSender:        nil,
+		maxRetries:       3,
+		retryIntervalSec: 1,
+		smsEnabled:       false,
+	}
+
+	now := time.Now().UTC()
+	smsNotification := model.Notification{
+		NotificationID:   "notif-sms-disabled",
+		NotificationType: model.NotificationSMS,
+		Recipient:        "+15555555555",
+		Message:          "Body",
+		Status:           model.StatusQueued,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+
+	if createError := model.CreateNotification(context.Background(), database, &smsNotification); createError != nil {
+		t.Fatalf("create notification error: %v", createError)
+	}
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			t.Fatalf("unexpected panic during retry processing: %v", recovered)
+		}
+	}()
+
+	serviceInstance.processRetries(context.Background())
+
+	updatedNotification, fetchError := model.GetNotificationByID(context.Background(), database, "notif-sms-disabled")
+	if fetchError != nil {
+		t.Fatalf("fetch notification error: %v", fetchError)
+	}
+
+	if updatedNotification.Status != model.StatusFailed {
+		t.Fatalf("expected status failed, got %s", updatedNotification.Status)
 	}
 }
 

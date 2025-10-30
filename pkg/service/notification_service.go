@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -21,6 +22,8 @@ type NotificationService interface {
 	StartRetryWorker(ctx context.Context)
 }
 
+var ErrSMSDisabled = errors.New("sms delivery disabled: missing Twilio credentials")
+
 type notificationServiceImpl struct {
 	database         *gorm.DB
 	logger           *slog.Logger
@@ -28,6 +31,7 @@ type notificationServiceImpl struct {
 	smsSender        SmsSender
 	maxRetries       int
 	retryIntervalSec int
+	smsEnabled       bool
 }
 
 // NewNotificationService creates a new NotificationService instance using the provided
@@ -41,7 +45,13 @@ func NewNotificationService(db *gorm.DB, logger *slog.Logger, cfg config.Config)
 		FromAddress: cfg.FromEmail,
 		Timeouts:    cfg, // Pass the full config for timeouts
 	}, logger)
-	smsSenderInstance := NewTwilioSmsSender(cfg.TwilioAccountSID, cfg.TwilioAuthToken, cfg.TwilioFromNumber, logger, cfg)
+	smsEnabled := cfg.TwilioConfigured()
+	var smsSenderInstance SmsSender
+	if smsEnabled {
+		smsSenderInstance = NewTwilioSmsSender(cfg.TwilioAccountSID, cfg.TwilioAuthToken, cfg.TwilioFromNumber, logger, cfg)
+	} else {
+		logger.Warn("SMS notifications disabled: missing Twilio credentials")
+	}
 	return &notificationServiceImpl{
 		database:         db,
 		logger:           logger,
@@ -49,6 +59,7 @@ func NewNotificationService(db *gorm.DB, logger *slog.Logger, cfg config.Config)
 		smsSender:        smsSenderInstance,
 		maxRetries:       cfg.MaxRetries,
 		retryIntervalSec: cfg.RetryIntervalSec,
+		smsEnabled:       smsEnabled,
 	}
 }
 
@@ -57,24 +68,23 @@ func (serviceInstance *notificationServiceImpl) SendNotification(ctx context.Con
 		serviceInstance.logger.Error("Missing required fields", "recipient", request.Recipient, "message", request.Message)
 		return model.NotificationResponse{}, fmt.Errorf("missing required fields: recipient or message")
 	}
+
+	switch request.NotificationType {
+	case model.NotificationEmail, model.NotificationSMS:
+	default:
+		serviceInstance.logger.Error("Unsupported notification type", "type", request.NotificationType)
+		return model.NotificationResponse{}, fmt.Errorf("unsupported notification type: %s", request.NotificationType)
+	}
+
+	if request.NotificationType == model.NotificationSMS && !serviceInstance.smsEnabled {
+		serviceInstance.logger.Warn("SMS notification rejected because delivery is disabled", "recipient", request.Recipient)
+		return model.NotificationResponse{}, ErrSMSDisabled
+	}
+
 	notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
 	newNotification := model.NewNotification(notificationID, request)
 
-	switch newNotification.NotificationType {
-	case model.NotificationEmail, model.NotificationSMS:
-	default:
-		serviceInstance.logger.Error("Unsupported notification type", "type", newNotification.NotificationType)
-		return model.NotificationResponse{}, fmt.Errorf("unsupported notification type: %s", newNotification.NotificationType)
-	}
-
 	currentTime := time.Now().UTC()
-
-	switch newNotification.NotificationType {
-	case model.NotificationEmail, model.NotificationSMS:
-	default:
-		serviceInstance.logger.Error("Unsupported notification type", "type", newNotification.NotificationType)
-		return model.NotificationResponse{}, fmt.Errorf("unsupported notification type: %s", newNotification.NotificationType)
-	}
 
 	shouldAttemptImmediateSend := true
 	if request.ScheduledFor != nil && request.ScheduledFor.After(currentTime) {
@@ -92,6 +102,10 @@ func (serviceInstance *notificationServiceImpl) SendNotification(ctx context.Con
 				// When using SMTP no provider message ID is returned.
 			}
 		case model.NotificationSMS:
+			if serviceInstance.smsSender == nil {
+				dispatchError = ErrSMSDisabled
+				break
+			}
 			var providerMessageID string
 			providerMessageID, dispatchError = serviceInstance.smsSender.SendSms(ctx, newNotification.Recipient, newNotification.Message)
 			if dispatchError == nil {
@@ -152,6 +166,17 @@ func (serviceInstance *notificationServiceImpl) processRetries(ctx context.Conte
 	}
 	for _, notificationRecord := range notificationRecords {
 		if notificationRecord.ScheduledFor != nil && currentTime.Before(notificationRecord.ScheduledFor.UTC()) {
+			continue
+		}
+		if notificationRecord.NotificationType == model.NotificationSMS && !serviceInstance.smsEnabled {
+			serviceInstance.logger.Warn("Skipping SMS retry because delivery is disabled", "notification_id", notificationRecord.NotificationID)
+			notificationRecord.Status = model.StatusFailed
+			notificationRecord.ProviderMessageID = ""
+			notificationRecord.RetryCount++
+			notificationRecord.LastAttemptedAt = currentTime
+			if saveError := model.SaveNotification(ctx, serviceInstance.database, &notificationRecord); saveError != nil {
+				serviceInstance.logger.Error("Failed to update notification after disabled SMS check", "notification_id", notificationRecord.NotificationID, "error", saveError)
+			}
 			continue
 		}
 		// Apply exponential backoff: baseInterval * 2^(retry_count)

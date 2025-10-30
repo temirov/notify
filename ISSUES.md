@@ -13,7 +13,8 @@ In this file the entries (issues) record newly discovered requests or changes, w
 
 - [x] [PN-07] Remove all and any mentioning of Sendgrid . Replace it with our own implementation of sending emails to the desination emails. Build a detailed plan of sending emails using SMTP protocol.
   - Resolved: Captured provider-agnostic SMTP delivery documentation, linked it from README, and added a wiring regression test for the in-process SMTP sender.
-- [ ] [PN-09] Disable SMS notifications and log the fact that the text notifications are disabled when TWILIO credentials are absent in the environemnt on the start
+- [x] [PN-09] Disable SMS notifications and log the fact that the text notifications are disabled when TWILIO credentials are absent in the environemnt on the start
+  - Resolved: Treated Twilio credentials as optional, logged the disabled state at startup, and prevented SMS dispatch/retries when configuration is incomplete.
 
 ## BugFixes
 
