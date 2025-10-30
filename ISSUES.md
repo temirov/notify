@@ -9,11 +9,13 @@ In this file the entries (issues) record newly discovered requests or changes, w
 
 ## Improvements
 
-- [ ] [PN-07] Remove all and any mentioning of Sendgrid . Replace it with our own implementation of sending emails to the desination emails. Build a detailed plan of sending emails using SMTP protocol.
+- [x] [PN-07] Remove all and any mentioning of Sendgrid . Replace it with our own implementation of sending emails to the desination emails. Build a detailed plan of sending emails using SMTP protocol.
+  - Resolved: Captured provider-agnostic SMTP delivery documentation, linked it from README, and added a wiring regression test for the in-process SMTP sender.
 
 ## BugFixes
 
-- [ ] [PN-06] Remove all and any mentioning, coding references or logic related to Sendgrid. The service is intended to be the required email integration with email providers, and not a middleman for other services.
+- [x] [PN-06] Remove all and any mentioning, coding references or logic related to Sendgrid. The service is intended to be the required email integration with email providers, and not a middleman for other services.
+  - Resolved: Renamed the email sender and configuration to provider-agnostic SMTP equivalents, updated env variables/tests, and refreshed documentation to eliminate SendGrid-specific language.
 
 ## Maintenance
 

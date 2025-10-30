@@ -15,11 +15,11 @@ type Config struct {
 	MaxRetries       int
 	RetryIntervalSec int
 
-	SendGridUsername   string
-	SendGridPassword   string
-	SendSmtpServer     string
-	SendSmtpServerPort int
-	FromEmail          string
+	SMTPUsername string
+	SMTPPassword string
+	SMTPHost     string
+	SMTPPort     int
+	FromEmail    string
 
 	TwilioAccountSID string
 	TwilioAuthToken  string
@@ -41,10 +41,10 @@ func LoadConfig() (Config, error) {
 		loadEnvString("LOG_LEVEL", &configuration.LogLevel),
 		loadEnvInt("MAX_RETRIES", &configuration.MaxRetries),
 		loadEnvInt("RETRY_INTERVAL_SEC", &configuration.RetryIntervalSec),
-		loadEnvString("SENDGRID_USERNAME", &configuration.SendGridUsername),
-		loadEnvString("SENDGRID_PASSWORD", &configuration.SendGridPassword),
-		loadEnvString("SENDGRID_SMTP_SERVER", &configuration.SendSmtpServer),
-		loadEnvInt("SENDGRID_SMTP_SERVER_PORT", &configuration.SendSmtpServerPort),
+		loadEnvString("SMTP_USERNAME", &configuration.SMTPUsername),
+		loadEnvString("SMTP_PASSWORD", &configuration.SMTPPassword),
+		loadEnvString("SMTP_HOST", &configuration.SMTPHost),
+		loadEnvInt("SMTP_PORT", &configuration.SMTPPort),
 		loadEnvString("FROM_EMAIL", &configuration.FromEmail),
 		loadEnvString("TWILIO_ACCOUNT_SID", &configuration.TwilioAccountSID),
 		loadEnvString("TWILIO_AUTH_TOKEN", &configuration.TwilioAuthToken),

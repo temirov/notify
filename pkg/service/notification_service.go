@@ -33,11 +33,11 @@ type notificationServiceImpl struct {
 // NewNotificationService creates a new NotificationService instance using the provided
 // database, logger, and service-level configuration. It instantiates its own protocol-specific senders.
 func NewNotificationService(db *gorm.DB, logger *slog.Logger, cfg config.Config) NotificationService {
-	emailSenderInstance := NewSendGridEmailSender(SMTPConfig{
-		Host:        cfg.SendSmtpServer,
-		Port:        fmt.Sprintf("%d", cfg.SendSmtpServerPort),
-		Username:    cfg.SendGridUsername,
-		Password:    cfg.SendGridPassword,
+	emailSenderInstance := NewSMTPEmailSender(SMTPConfig{
+		Host:        cfg.SMTPHost,
+		Port:        fmt.Sprintf("%d", cfg.SMTPPort),
+		Username:    cfg.SMTPUsername,
+		Password:    cfg.SMTPPassword,
 		FromAddress: cfg.FromEmail,
 		Timeouts:    cfg, // Pass the full config for timeouts
 	}, logger)

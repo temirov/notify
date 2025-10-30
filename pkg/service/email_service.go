@@ -26,19 +26,19 @@ type EmailSender interface {
 	SendEmail(ctx context.Context, recipient string, subject string, message string) error
 }
 
-type SendGridEmailSender struct {
+type SMTPEmailSender struct {
 	Config SMTPConfig
 	Logger *slog.Logger
 }
 
-func NewSendGridEmailSender(configuration SMTPConfig, logger *slog.Logger) *SendGridEmailSender {
-	return &SendGridEmailSender{
+func NewSMTPEmailSender(configuration SMTPConfig, logger *slog.Logger) *SMTPEmailSender {
+	return &SMTPEmailSender{
 		Config: configuration,
 		Logger: logger,
 	}
 }
 
-func (senderInstance *SendGridEmailSender) SendEmail(ctx context.Context, recipient string, subject string, message string) error {
+func (senderInstance *SMTPEmailSender) SendEmail(ctx context.Context, recipient string, subject string, message string) error {
 	emailMessage := buildEmailMessage(senderInstance.Config.FromAddress, recipient, subject, message)
 
 	if senderInstance.Config.Port == "465" {
