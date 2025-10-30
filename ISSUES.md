@@ -15,6 +15,8 @@ In this file the entries (issues) record newly discovered requests or changes, w
   - Resolved: Captured provider-agnostic SMTP delivery documentation, linked it from README, and added a wiring regression test for the in-process SMTP sender.
 - [x] [PN-09] Disable SMS notifications and log the fact that the text notifications are disabled when TWILIO credentials are absent in the environemnt on the start
   - Resolved: Treated Twilio credentials as optional, logged the disabled state at startup, and prevented SMS dispatch/retries when configuration is incomplete.
+- [x] [PN-11] Add generate-secret command to the CLI that generates sufficiently long secret string suited to be used as NOTIFICATION_AUTH_TOKEN. Keep the logic of the key generation in /pkg so that it could be later refactored into a shared package.
+  - Resolved: Added pkg/secret crypto generator with length guards, wired `generate-secret` CLI command, and covered success/error flows with tests and documentation.
 
 ## BugFixes
 
@@ -131,5 +133,7 @@ In this file the entries (issues) record newly discovered requests or changes, w
            labels: ${{ steps.meta.outputs.labels }}
      ```
   ````
+
+- [ ] [PN-10] Refactor the code so that the code meant as internal structure of packages is under internal/ and the code emant to be shared with other programs is under pkg/
 
 ## Planning (do not work on these, not ready)

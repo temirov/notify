@@ -3,16 +3,24 @@ package command
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/temirov/pinguin/pkg/grpcapi"
+	"github.com/temirov/pinguin/pkg/secret"
 )
 
 type stubClient struct {
 	requests []*grpcapi.NotificationRequest
 	err      error
+}
+
+type stubSecretGenerator struct {
+	generatedSecret string
+	err             error
+	receivedLength  secret.ByteLength
 }
 
 func (clientInstance *stubClient) SendNotification(_ context.Context, req *grpcapi.NotificationRequest) (*grpcapi.NotificationResponse, error) {
@@ -208,5 +216,125 @@ func TestSendCommandFormatsOutput(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), grpcapi.Status_SENT.String()) {
 		t.Fatalf("expected output to contain status, got %s", output.String())
+	}
+}
+
+func (generator *stubSecretGenerator) GenerateSecret(_ context.Context, length secret.ByteLength) (string, error) {
+	generator.receivedLength = length
+	if generator.err != nil {
+		return "", generator.err
+	}
+	return generator.generatedSecret, nil
+}
+
+func TestGenerateSecretCommandOutputsSecret(t *testing.T) {
+	t.Parallel()
+
+	secretValue := "static-secret"
+	generator := &stubSecretGenerator{
+		generatedSecret: secretValue,
+	}
+	output := &bytes.Buffer{}
+	deps := Dependencies{
+		Sender:          &stubClient{},
+		Output:          output,
+		SecretGenerator: generator,
+	}
+	cmd := NewRootCommand(deps)
+	cmd.SetArgs([]string{
+		"generate-secret",
+	})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+
+	result := strings.TrimSpace(output.String())
+	if result != secretValue {
+		t.Fatalf("expected secret %q, got %q", secretValue, result)
+	}
+}
+
+func TestGenerateSecretCommandPassesLengthFlag(t *testing.T) {
+	t.Parallel()
+
+	expectedLength, err := secret.NewByteLength(96)
+	if err != nil {
+		t.Fatalf("expected nil error constructing length, got %v", err)
+	}
+	generator := &stubSecretGenerator{
+		generatedSecret: "unused",
+	}
+	output := &bytes.Buffer{}
+	deps := Dependencies{
+		Sender:          &stubClient{},
+		Output:          output,
+		SecretGenerator: generator,
+	}
+	cmd := NewRootCommand(deps)
+	cmd.SetArgs([]string{
+		"generate-secret",
+		"--bytes", "96",
+	})
+
+	executeErr := cmd.Execute()
+	if executeErr != nil {
+		t.Fatalf("expected nil error, got %v", executeErr)
+	}
+	if generator.receivedLength != expectedLength {
+		t.Fatalf("expected generator to receive %v, got %v", expectedLength, generator.receivedLength)
+	}
+}
+
+func TestGenerateSecretCommandRejectsInvalidLength(t *testing.T) {
+	t.Parallel()
+
+	generator := &stubSecretGenerator{
+		generatedSecret: "unused",
+	}
+	deps := Dependencies{
+		Sender:          &stubClient{},
+		Output:          &bytes.Buffer{},
+		SecretGenerator: generator,
+	}
+	cmd := NewRootCommand(deps)
+	cmd.SetArgs([]string{
+		"generate-secret",
+		"--bytes", "10",
+	})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected error but got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid secret length") {
+		t.Fatalf("expected invalid length error, got %v", err)
+	}
+}
+
+func TestGenerateSecretCommandSurfacesGeneratorError(t *testing.T) {
+	t.Parallel()
+
+	expectedErr := errors.New("random failure")
+	generator := &stubSecretGenerator{
+		err: expectedErr,
+	}
+	deps := Dependencies{
+		Sender:          &stubClient{},
+		Output:          &bytes.Buffer{},
+		SecretGenerator: generator,
+	}
+	cmd := NewRootCommand(deps)
+	cmd.SetArgs([]string{
+		"generate-secret",
+	})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected error but got none")
+	}
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected %v, got %v", expectedErr, err)
 	}
 }
