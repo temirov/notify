@@ -147,13 +147,14 @@ In this file the entries (issues) record newly discovered requests or changes, w
 
 - [x] [PN-10] Refactor the code so that the code meant as internal structure of packages is under internal/ and the code emant to be shared with other programs is under pkg/
   - Resolved: Moved server-only config, db, model, and service packages under `internal/`, updated imports, and verified tests + vet across the tree.
-- [ ] [PN-14] The app failes to start with the message of missing variables but the readme doesnt mention them in the .env section. Add all missing variables to the README.md with the explanation of their meaning and suggested values
-```
-pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="configuration errors: missing environment variable OPERATION_TIMEOUT_SEC"
-pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="missing environment variable CONNECTION_TIMEOUT_SEC"
-pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="missing environment variable RETRY_INTERVAL_SEC"
-pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="missing environment variable GRPC_AUTH_TOKEN"
-pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="missing environment variable MAX_RETRIES"
-```
+- [x] [PN-14] The app failes to start with the message of missing variables but the readme doesnt mention them in the .env section. Add all missing variables to the README.md with the explanation of their meaning and suggested values
+  ```
+  pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="configuration errors: missing environment variable OPERATION_TIMEOUT_SEC"
+  pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="missing environment variable CONNECTION_TIMEOUT_SEC"
+  pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="missing environment variable RETRY_INTERVAL_SEC"
+  pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="missing environment variable GRPC_AUTH_TOKEN"
+  pinguin    | time=2025-10-30T21:10:36.394Z level=ERROR msg="Configuration error" detail="missing environment variable MAX_RETRIES"
+  ```
+  - Resolved: Updated README and the sample `.env` to enumerate every required variable (including GRPC and timeout settings) with recommended defaults.
 
 ## Planning (do not work on these, not ready)

@@ -90,9 +90,15 @@ Pinguin is configured via environment variables. Create a `.env` file or export 
 - **LOG_LEVEL:**  
   Logging level. Possible values: `DEBUG`, `INFO`, `WARN`, `ERROR`.
 
-- **NOTIFICATION_AUTH_TOKEN:**  
+- **GRPC_AUTH_TOKEN:**  
   Bearer token used for authenticating gRPC requests. All clients must supply this token.  
   Generate a value with `openssl rand -base64 32` (or an equivalent secure random command) and store it in a password manager.
+
+- **CONNECTION_TIMEOUT_SEC:**  
+  Number of seconds to wait when establishing outbound SMTP/Twilio connections. A value of `5` seconds works well for most deployments.
+
+- **OPERATION_TIMEOUT_SEC:**  
+  Maximum number of seconds to wait for a send attempt before treating it as failed. Set this to `30` seconds unless your provider requires longer operations.
 
 - **MAX_RETRIES:**  
   Maximum number of times the background worker will retry sending a failed notification.
@@ -131,7 +137,11 @@ Example `.env` file:
 ```bash
 DATABASE_PATH=app.db
 LOG_LEVEL=DEBUG
-NOTIFICATION_AUTH_TOKEN=my-secret-token
+GRPC_AUTH_TOKEN=my-secret-token
+MAX_RETRIES=3
+RETRY_INTERVAL_SEC=30
+CONNECTION_TIMEOUT_SEC=5
+OPERATION_TIMEOUT_SEC=30
 
 SMTP_USERNAME=apikey
 SMTP_PASSWORD=super-secret-password
