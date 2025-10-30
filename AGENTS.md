@@ -1,6 +1,8 @@
 # AGENTS.md
 
-## Notification Service
+## Pinguin Notification Service
+
+Pinguin is a production‑quality notification service written in Go. It exposes a gRPC interface for sending **email** and **SMS** notifications on a schedule. See README.md for details
 
 ## Document Roles
 
@@ -13,6 +15,10 @@
 - Resolved: Completed and verified; no further action.
 - Unresolved: Needs decision and/or implementation.
 - Blocked: Requires an external dependency or policy decision.
+
+### Validation & Confidence Policy
+
+All rules for validation, error handling, invariants, and “confident programming” (no defensive checks, edge-only validation, smart constructors, CI gates) are defined in POLICY.md. Treat that document as binding; this file does not restate them.
 
 ## Front-End Coding Standards (Browser ES Modules with Alpine.js + Vanilla CSS)
 
