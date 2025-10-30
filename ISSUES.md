@@ -13,7 +13,8 @@ In this file the entries (issues) record newly discovered requests or changes, w
 
 ## BugFixes
 
-- [ ] [PN-06] Remove all and any mentioning, coding references or logic related to Sendgrid. The service is intended to be the required email integration with email providers, and not a middleman for other services.
+- [x] [PN-06] Remove all and any mentioning, coding references or logic related to Sendgrid. The service is intended to be the required email integration with email providers, and not a middleman for other services.
+  - Resolved: Renamed the email sender and configuration to provider-agnostic SMTP equivalents, updated env variables/tests, and refreshed documentation to eliminate SendGrid-specific language.
 
 ## Maintenance
 

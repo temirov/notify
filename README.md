@@ -28,7 +28,7 @@ Pinguin is a production‑quality notification service written in Go. It exposes
   All interactions (sending notifications, retrieving statuses) are done via a gRPC interface.
 
 - **Email and SMS Notifications:**  
-  - **Email:** Delivered via SMTP using SendGrid’s settings (with fallback logic for recommended port usage).
+  - **Email:** Delivered via SMTP using the credentials you configure for your preferred mail provider.
   - **SMS:** Delivered using Twilio’s REST API.
 
 - **Scheduled Delivery:**  
@@ -51,7 +51,7 @@ Pinguin is a production‑quality notification service written in Go. It exposes
 ## Requirements
 
 - **Go 1.21+** (tested with Go 1.24)
-- An SMTP‑compatible service account (SendGrid is configured by default)
+- An SMTP-compatible service account (any provider that supports standard SMTP)
 - A Twilio account for SMS notifications (if needed)
 - SQLite (or any GORM‑compatible database)
 
@@ -99,20 +99,20 @@ Pinguin is configured via environment variables. Create a `.env` file or export 
 - **RETRY_INTERVAL_SEC:**  
   Base interval (in seconds) between retry scans. The actual backoff is exponential.
 
-- **SENDGRID_USERNAME:**  
-  SMTP username for SendGrid (typically set to `"apikey"`).
+- **SMTP_USERNAME:**  
+  SMTP username provided by your email service. Some providers require the full email address.
 
-- **SENDGRID_PASSWORD:**  
-  Your SendGrid API key (used as the SMTP password).
+- **SMTP_PASSWORD:**  
+  SMTP password or application-specific password issued by your provider.
 
 - **FROM_EMAIL:**  
   The email address from which notifications are sent. This must be a verified sender with your SMTP provider.
 
-- **SENDGRID_SMTP_SERVER:**  
-  The SMTP host for SendGrid (e.g., `smtp.sendgrid.net`).
+- **SMTP_HOST:**  
+  The hostname of the SMTP server (e.g., `smtp.yourdomain.com`).
 
-- **SENDGRID_SMTP_SERVER_PORT:**  
-  The SMTP port for SendGrid. For best results, configure this to `587`. If set to `465`, the service will log a warning and switch to `587`.
+- **SMTP_PORT:**  
+  The SMTP port. Use `587` for STARTTLS or `465` for implicit TLS; the service will initiate TLS automatically when you specify `465`.
 
 - **TWILIO_ACCOUNT_SID:**  
   Your Twilio Account SID, used for sending SMS messages.
@@ -130,11 +130,11 @@ DATABASE_PATH=app.db
 LOG_LEVEL=DEBUG
 NOTIFICATION_AUTH_TOKEN=my-secret-token
 
-SENDGRID_USERNAME=apikey
-SENDGRID_PASSWORD=YOUR_SENDGRID_API_KEY
+SMTP_USERNAME=apikey
+SMTP_PASSWORD=super-secret-password
 FROM_EMAIL=support@yourdomain.com
-SENDGRID_SMTP_SERVER=smtp.sendgrid.net
-SENDGRID_SMTP_SERVER_PORT=465
+SMTP_HOST=smtp.yourdomain.com
+SMTP_PORT=587
 
 TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxx
 TWILIO_AUTH_TOKEN=yyyyyyyyyyyyyy
@@ -208,7 +208,7 @@ grpcurl -d '{
 
 2. **Immediate Dispatch:**  
    The server attempts to dispatch the notification immediately:
-    - **Email:** Sent via SMTP using SendGrid settings (with fallback logic if port 465 is used).
+    - **Email:** Sent via SMTP using the configured credentials. When you supply port `465`, Pinguin initiates the connection over TLS before issuing SMTP commands; otherwise it uses STARTTLS on demand.
     - **SMS:** Sent using Twilio’s REST API.
 
 3. **Background Worker:**  
