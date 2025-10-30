@@ -9,7 +9,6 @@ import (
 	cliConfig "github.com/temirov/pinguin/clients/cli/internal/config"
 	"github.com/temirov/pinguin/pkg/client"
 	"github.com/temirov/pinguin/pkg/logging"
-	"github.com/temirov/pinguin/pkg/secret"
 )
 
 func main() {
@@ -40,17 +39,10 @@ func main() {
 	}
 	defer notificationClient.Close()
 
-	secretGenerator, err := secret.NewCryptoGenerator()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-
 	root := command.NewRootCommand(command.Dependencies{
 		Sender:           notificationClient,
 		OperationTimeout: cfg.OperationTimeout(),
 		Output:           os.Stdout,
-		SecretGenerator:  secretGenerator,
 	})
 	root.SetOut(os.Stdout)
 	root.SetErr(os.Stderr)

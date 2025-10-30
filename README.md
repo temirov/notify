@@ -91,7 +91,8 @@ Pinguin is configured via environment variables. Create a `.env` file or export 
   Logging level. Possible values: `DEBUG`, `INFO`, `WARN`, `ERROR`.
 
 - **NOTIFICATION_AUTH_TOKEN:**  
-  Bearer token used for authenticating gRPC requests. All clients must supply this token.
+  Bearer token used for authenticating gRPC requests. All clients must supply this token.  
+  Generate a value with `openssl rand -base64 32` (or an equivalent secure random command) and store it in a password manager.
 
 - **MAX_RETRIES:**  
   Maximum number of times the background worker will retry sending a failed notification.
@@ -198,16 +199,6 @@ PINGUIN_GRPC_AUTH_TOKEN=my-secret-token \
   --message "See you at 10:00" \
   --scheduled-time "2025-01-02T15:04:05Z"
 ```
-
-#### Generate Authentication Secret
-
-The CLI can generate a strong bearer token for `NOTIFICATION_AUTH_TOKEN`:
-
-```bash
-./pinguin-cli generate-secret --bytes 48
-```
-
-Omit `--bytes` to use the default 48-byte entropy source (64 URL-safe characters). Larger values are accepted as long as they exceed the 32-byte minimum.
 
 ### Command‑Line Client Test
 

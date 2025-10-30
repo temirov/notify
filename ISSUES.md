@@ -17,7 +17,8 @@ In this file the entries (issues) record newly discovered requests or changes, w
   - Resolved: Treated Twilio credentials as optional, logged the disabled state at startup, and prevented SMS dispatch/retries when configuration is incomplete.
 - [x] [PN-11] Add generate-secret command to the CLI that generates sufficiently long secret string suited to be used as NOTIFICATION_AUTH_TOKEN. Keep the logic of the key generation in /pkg so that it could be later refactored into a shared package.
   - Resolved: Added pkg/secret crypto generator with length guards, wired `generate-secret` CLI command, and covered success/error flows with tests and documentation.
-- [ ] [PN-12] Remove generate-secret command and all associated files and document the usage of built in tools (openssl rand -base64 32) to get the strong secret key
+- [x] [PN-12] Remove generate-secret command and all associated files and document the usage of built in tools (openssl rand -base64 32) to get the strong secret key
+  - Resolved: Deleted the CLI secret generator and related package, and updated README guidance to use `openssl rand -base64 32` for token creation.
 
 ## BugFixes
 
