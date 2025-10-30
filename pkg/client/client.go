@@ -2,12 +2,12 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
-	"os"
+	"strings"
 	"time"
 
-	"github.com/temirov/pinguin/pkg/config"
 	"github.com/temirov/pinguin/pkg/grpcapi"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -15,45 +15,80 @@ import (
 	"log/slog"
 )
 
-// NotificationClient is a thin wrapper over the gRPC NotificationService client.
+var ErrInvalidSettings = errors.New("invalid_client_settings")
+
+type Settings struct {
+	serverAddress     string
+	authToken         string
+	connectionTimeout time.Duration
+	operationTimeout  time.Duration
+}
+
+func NewSettings(serverAddress string, authToken string, connectionTimeoutSeconds int, operationTimeoutSeconds int) (Settings, error) {
+	address := strings.TrimSpace(serverAddress)
+	if address == "" {
+		return Settings{}, fmt.Errorf("%w: empty server address", ErrInvalidSettings)
+	}
+	token := strings.TrimSpace(authToken)
+	if token == "" {
+		return Settings{}, fmt.Errorf("%w: empty auth token", ErrInvalidSettings)
+	}
+	if connectionTimeoutSeconds <= 0 {
+		return Settings{}, fmt.Errorf("%w: invalid connection timeout %d", ErrInvalidSettings, connectionTimeoutSeconds)
+	}
+	if operationTimeoutSeconds <= 0 {
+		return Settings{}, fmt.Errorf("%w: invalid operation timeout %d", ErrInvalidSettings, operationTimeoutSeconds)
+	}
+	return Settings{
+		serverAddress:     address,
+		authToken:         token,
+		connectionTimeout: time.Duration(connectionTimeoutSeconds) * time.Second,
+		operationTimeout:  time.Duration(operationTimeoutSeconds) * time.Second,
+	}, nil
+}
+
+func (s Settings) ServerAddress() string {
+	return s.serverAddress
+}
+
+func (s Settings) AuthToken() string {
+	return s.authToken
+}
+
+func (s Settings) ConnectionTimeout() time.Duration {
+	return s.connectionTimeout
+}
+
+func (s Settings) OperationTimeout() time.Duration {
+	return s.operationTimeout
+}
+
 type NotificationClient struct {
 	conn       *grpc.ClientConn
 	grpcClient grpcapi.NotificationServiceClient
 	authToken  string
 	logger     *slog.Logger
-	config     config.Config
+	settings   Settings
 }
 
-// NewNotificationClient creates a new NotificationClient.
-// It reads GRPC_SERVER_ADDR (defaulting to "localhost:50051") and uses the provided config for timeouts.
-func NewNotificationClient(logger *slog.Logger, cfg config.Config) (*NotificationClient, error) {
-	serverAddress := os.Getenv("GRPC_SERVER_ADDR")
-	if serverAddress == "" {
-		serverAddress = "localhost:50051"
-	}
-
-	// Create a context with timeout for dialing
-	dialCtx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.ConnectionTimeoutSec)*time.Second)
+func NewNotificationClient(logger *slog.Logger, settings Settings) (*NotificationClient, error) {
+	dialCtx, cancel := context.WithTimeout(context.Background(), settings.ConnectionTimeout())
 	defer cancel()
 
-	// Use grpc.NewClient with dial options (replaces deprecated DialContext)
 	conn, err := grpc.NewClient(
-		serverAddress,
+		settings.ServerAddress(),
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
-			// Use the standard dialer with the provided context
 			dialer := &net.Dialer{}
 			return dialer.DialContext(ctx, "tcp", addr)
 		}),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		// No need for WithBlock; grpc.NewClient blocks until the connection is ready or fails
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial gRPC server: %w", err)
 	}
 
-	// Check if the context was canceled before proceeding
 	if dialCtx.Err() != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("dialing gRPC server timed out: %w", dialCtx.Err())
 	}
 
@@ -61,20 +96,16 @@ func NewNotificationClient(logger *slog.Logger, cfg config.Config) (*Notificatio
 	return &NotificationClient{
 		conn:       conn,
 		grpcClient: grpcClient,
-		authToken:  cfg.GRPCAuthToken,
+		authToken:  settings.AuthToken(),
 		logger:     logger,
-		config:     cfg,
+		settings:   settings,
 	}, nil
 }
 
-// Close closes the underlying gRPC connection.
 func (clientInstance *NotificationClient) Close() error {
 	return clientInstance.conn.Close()
 }
 
-// SendNotification sends the provided NotificationRequest using the provided context
-// and appends the required authorization header.
-// Note: Errors are simply returned without logging here.
 func (clientInstance *NotificationClient) SendNotification(ctx context.Context, req *grpcapi.NotificationRequest) (*grpcapi.NotificationResponse, error) {
 	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+clientInstance.authToken)
 	resp, err := clientInstance.grpcClient.SendNotification(ctx, req)
@@ -84,10 +115,8 @@ func (clientInstance *NotificationClient) SendNotification(ctx context.Context, 
 	return resp, nil
 }
 
-// GetNotificationStatus retrieves the status of a notification by its ID.
-// Note: Errors are simply returned without logging here.
 func (clientInstance *NotificationClient) GetNotificationStatus(notificationID string) (*grpcapi.NotificationResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(clientInstance.config.OperationTimeoutSec)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), clientInstance.settings.OperationTimeout())
 	defer cancel()
 	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+clientInstance.authToken)
 	req := &grpcapi.GetNotificationStatusRequest{
@@ -100,10 +129,8 @@ func (clientInstance *NotificationClient) GetNotificationStatus(notificationID s
 	return resp, nil
 }
 
-// SendNotificationAndWait sends a notification and then polls for its final status until it is SENT or FAILED.
-// It logs errors only here, so duplicate logging is avoided.
 func (clientInstance *NotificationClient) SendNotificationAndWait(req *grpcapi.NotificationRequest) (*grpcapi.NotificationResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(clientInstance.config.OperationTimeoutSec)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), clientInstance.settings.OperationTimeout())
 	defer cancel()
 
 	resp, err := clientInstance.SendNotification(ctx, req)
@@ -111,9 +138,8 @@ func (clientInstance *NotificationClient) SendNotificationAndWait(req *grpcapi.N
 		clientInstance.logger.Error("SendNotification failed", "error", err)
 		return nil, err
 	}
-
 	const pollInterval = 2 * time.Second
-	pollTimeout := time.Duration(clientInstance.config.OperationTimeoutSec) * time.Second
+	pollTimeout := clientInstance.settings.OperationTimeout()
 	startTime := time.Now()
 
 	for {
@@ -129,10 +155,10 @@ func (clientInstance *NotificationClient) SendNotificationAndWait(req *grpcapi.N
 		}
 
 		time.Sleep(pollInterval)
-		statusResp, err := clientInstance.GetNotificationStatus(resp.NotificationId)
-		if err != nil {
-			clientInstance.logger.Error("GetNotificationStatus failed", "notificationID", resp.NotificationId, "error", err)
-			return nil, err
+		statusResp, statusErr := clientInstance.GetNotificationStatus(resp.NotificationId)
+		if statusErr != nil {
+			clientInstance.logger.Error("GetNotificationStatus failed", "notificationID", resp.NotificationId, "error", statusErr)
+			return nil, statusErr
 		}
 		resp = statusResp
 	}

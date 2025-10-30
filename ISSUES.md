@@ -6,7 +6,8 @@ In this file the entries (issues) record newly discovered requests or changes, w
 
 - [x] [PN-05] Add a scheduler to the API and the implementation, alowing to schedule when the notifications are sent
   - Resolved: Introduced optional gRPC `scheduled_time`, persisted scheduling metadata, updated workers, and added scheduling regression tests.
-- [ ] [PN-08] Add a CLI client under new clients/cli folder. The CLI client shall be able to connect to the Pinguin Notification Service and submit/schedule notification delivery
+- [x] [PN-08] Add a CLI client under new clients/cli folder. The CLI client shall be able to connect to the Pinguin Notification Service and submit/schedule notification delivery
+  - Resolved: Added Cobra/Viper CLI with send command, injected gRPC client settings, scheduled-time parsing, and regression tests for request construction/error handling.
 
 ## Improvements
 

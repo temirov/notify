@@ -165,6 +165,38 @@ By default, the server listens on port `50051`. The server initializes the SQLit
 
 ## Using the gRPC API
 
+### Pinguin CLI
+
+The repository includes an interactive CLI at `clients/cli` built with Cobra and Viper. It sends email or SMS notifications and supports scheduled delivery.
+
+Build the binary:
+
+```bash
+go build -o pinguin-cli ./clients/cli
+```
+
+Configuration values are read from environment variables prefixed with `PINGUIN_`:
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `PINGUIN_GRPC_SERVER_ADDR` | Target gRPC endpoint | `localhost:50051` |
+| `PINGUIN_GRPC_AUTH_TOKEN` | Bearer token used for authentication | _required_ |
+| `PINGUIN_CONNECTION_TIMEOUT_SEC` | Dial timeout in seconds | `5` |
+| `PINGUIN_OPERATION_TIMEOUT_SEC` | Per-command timeout in seconds | `30` |
+| `PINGUIN_LOG_LEVEL` | CLI log level (`DEBUG`, `INFO`, `WARN`, `ERROR`) | `INFO` |
+
+Example command that schedules an email:
+
+```bash
+PINGUIN_GRPC_AUTH_TOKEN=my-secret-token \
+./pinguin-cli send \
+  --type email \
+  --recipient someone@example.com \
+  --subject "Meeting Reminder" \
+  --message "See you at 10:00" \
+  --scheduled-time "2025-01-02T15:04:05Z"
+```
+
 ### Command‑Line Client Test
 
 A lightweight client test application is available under `cmd/client_test/main.go`. This client wraps the gRPC calls and demonstrates sending a notification. To run the client test, use:
