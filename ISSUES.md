@@ -33,7 +33,7 @@ In this file the entries (issues) record newly discovered requests or changes, w
          github.com/temirov/pinguin/cmd/server
   ```
   - Resolved: Split the CLI and sample client into their own modules so root `go run ./...` targets only the server while dedicated commands still run locally.
-- [ ] [PN-15] Can not build client from the root folder:
+- [x] [PN-15] Can not build client from the root folder:
 ```
 14:55:27 tyemirov@computercat:~/Development/pinguin [master] $ go build -o bin/pinguin-cli clients/cli/main.go
 clients/cli/main.go:7:2: no required module provides package github.com/spf13/viper; to add it:
@@ -43,6 +43,7 @@ clients/cli/main.go:8:2: no required module provides package github.com/temirov/
 clients/cli/main.go:9:2: no required module provides package github.com/temirov/pinguin/clients/cli/internal/config; to add it:
         go get github.com/temirov/pinguin/clients/cli/internal/config
 ```
+  - Resolved: Added a Go workspace tying the server and CLI modules together, introduced a regression test ensuring `go build clients/cli/main.go` succeeds from the repository root, and verified fmt/vet/test suites.
 
 ## Maintenance
 
