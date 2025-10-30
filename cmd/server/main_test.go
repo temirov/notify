@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/temirov/pinguin/pkg/client"
-	"github.com/temirov/pinguin/pkg/config"
 	"github.com/temirov/pinguin/pkg/grpcapi"
 	"github.com/temirov/pinguin/pkg/model"
 	"github.com/temirov/pinguin/pkg/service"
@@ -51,16 +50,13 @@ func TestNotificationServerHandlesClientRequests(t *testing.T) {
 	serverAddress, shutdown := startTestNotificationServer(t, notificationService, authToken)
 	defer shutdown()
 
-	t.Setenv("GRPC_SERVER_ADDR", serverAddress)
-
-	clientConfig := config.Config{
-		ConnectionTimeoutSec: 5,
-		OperationTimeoutSec:  5,
-		GRPCAuthToken:        authToken,
+	settings, settingsErr := client.NewSettings(serverAddress, authToken, 5, 5)
+	if settingsErr != nil {
+		t.Fatalf("settings error: %v", settingsErr)
 	}
 	clientLogger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
 
-	notificationClient, clientError := client.NewNotificationClient(clientLogger, clientConfig)
+	notificationClient, clientError := client.NewNotificationClient(clientLogger, settings)
 	if clientError != nil {
 		t.Fatalf("create client error: %v", clientError)
 	}

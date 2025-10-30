@@ -6,13 +6,15 @@ In this file the entries (issues) record newly discovered requests or changes, w
 
 - [x] [PN-05] Add a scheduler to the API and the implementation, alowing to schedule when the notifications are sent
   - Resolved: Introduced optional gRPC `scheduled_time`, persisted scheduling metadata, updated workers, and added scheduling regression tests.
-- [ ] [PN-08] Add a CLI client under new clients/cli folder. The CLI client shall be able to connect to the Pinguin Notification Service and submit/schedule notification delivery
+- [x] [PN-08] Add a CLI client under new clients/cli folder. The CLI client shall be able to connect to the Pinguin Notification Service and submit/schedule notification delivery
+  - Resolved: Added Cobra/Viper CLI with send command, injected gRPC client settings, scheduled-time parsing, and regression tests for request construction/error handling.
 
 ## Improvements
 
 - [x] [PN-07] Remove all and any mentioning of Sendgrid . Replace it with our own implementation of sending emails to the desination emails. Build a detailed plan of sending emails using SMTP protocol.
   - Resolved: Captured provider-agnostic SMTP delivery documentation, linked it from README, and added a wiring regression test for the in-process SMTP sender.
-- [ ] [PN-09] Disable SMS notifications and log the fact that the text notifications are disabled when TWILIO credentials are absent in the environemnt on the start
+- [x] [PN-09] Disable SMS notifications and log the fact that the text notifications are disabled when TWILIO credentials are absent in the environemnt on the start
+  - Resolved: Treated Twilio credentials as optional, logged the disabled state at startup, and prevented SMS dispatch/retries when configuration is incomplete.
 
 ## BugFixes
 

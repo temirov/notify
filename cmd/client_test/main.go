@@ -5,10 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/temirov/pinguin/pkg/client"
-	"github.com/temirov/pinguin/pkg/config"
 	"github.com/temirov/pinguin/pkg/grpcapi"
 	"log/slog"
 )
@@ -24,9 +24,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg, err := config.LoadConfig()
+	authToken := os.Getenv("GRPC_AUTH_TOKEN")
+	if authToken == "" {
+		fmt.Fprintln(os.Stderr, "GRPC_AUTH_TOKEN is required")
+		os.Exit(1)
+	}
+
+	serverAddress := os.Getenv("GRPC_SERVER_ADDR")
+	if serverAddress == "" {
+		serverAddress = "localhost:50051"
+	}
+
+	connectionTimeoutSec, err := readIntEnv("CONNECTION_TIMEOUT_SEC", 5)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to load configuration: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Invalid CONNECTION_TIMEOUT_SEC: %v\n", err)
+		os.Exit(1)
+	}
+
+	operationTimeoutSec, err := readIntEnv("OPERATION_TIMEOUT_SEC", 30)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid OPERATION_TIMEOUT_SEC: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -34,7 +51,13 @@ func main() {
 		Level: slog.LevelInfo,
 	}))
 
-	notificationClient, err := client.NewNotificationClient(logger, cfg)
+	settings, err := client.NewSettings(serverAddress, authToken, connectionTimeoutSec, operationTimeoutSec)
+	if err != nil {
+		logger.Error("Failed to validate client settings", "error", err)
+		os.Exit(1)
+	}
+
+	notificationClient, err := client.NewNotificationClient(logger, settings)
 	if err != nil {
 		logger.Error("Failed to create notification client", "error", err)
 		os.Exit(1)
@@ -48,7 +71,7 @@ func main() {
 		Message:          *message,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.OperationTimeoutSec)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(operationTimeoutSec)*time.Second)
 	defer cancel()
 
 	response, err := notificationClient.SendNotification(ctx, notificationRequest)
@@ -58,4 +81,19 @@ func main() {
 	}
 
 	fmt.Printf("Notification sent successfully. Notification ID: %s\n", response.NotificationId)
+}
+
+func readIntEnv(key string, defaultValue int) (int, error) {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, err
+	}
+	if parsed <= 0 {
+		return 0, fmt.Errorf("value must be positive")
+	}
+	return parsed, nil
 }
