@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added `pkg/secret` crypto generator and a `generate-secret` CLI command for issuing `NOTIFICATION_AUTH_TOKEN` values with configurable entropy.
 - Added a Cobra/Viper-based CLI for submitting immediate or scheduled notifications to the Pinguin gRPC service.
 - Disabled SMS delivery when Twilio credentials are absent and emit a startup warning to document the configuration gap.
 - Renamed the project to Pinguin, including module path, build targets, and user-facing documentation.

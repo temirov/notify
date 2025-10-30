@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/temirov/pinguin/pkg/grpcapi"
+	"github.com/temirov/pinguin/pkg/secret"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -16,10 +18,15 @@ type NotificationSender interface {
 	SendNotification(context.Context, *grpcapi.NotificationRequest) (*grpcapi.NotificationResponse, error)
 }
 
+type SecretGenerator interface {
+	GenerateSecret(context.Context, secret.ByteLength) (string, error)
+}
+
 type Dependencies struct {
 	Sender           NotificationSender
 	OperationTimeout time.Duration
 	Output           io.Writer
+	SecretGenerator  SecretGenerator
 }
 
 func NewRootCommand(dependencies Dependencies) *cobra.Command {
@@ -29,6 +36,7 @@ func NewRootCommand(dependencies Dependencies) *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.AddCommand(buildSendCommand(dependencies))
+	root.AddCommand(buildGenerateSecretCommand(dependencies))
 	return root
 }
 
@@ -123,4 +131,48 @@ func parseNotificationType(input string) (grpcapi.NotificationType, error) {
 
 func markRequired(cmd *cobra.Command, name string) {
 	_ = cmd.MarkFlagRequired(name)
+}
+
+func buildGenerateSecretCommand(dependencies Dependencies) *cobra.Command {
+	var bytesLength int
+
+	command := &cobra.Command{
+		Use:   "generate-secret",
+		Short: "Generate a NOTIFICATION_AUTH_TOKEN value",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			generator := dependencies.SecretGenerator
+			if generator == nil {
+				return errors.New("secret generator is not configured")
+			}
+
+			length := secret.DefaultByteLength()
+			if bytesLength > 0 {
+				parsedLength, err := secret.NewByteLength(bytesLength)
+				if err != nil {
+					return fmt.Errorf("invalid secret length: %w", err)
+				}
+				length = parsedLength
+			}
+
+			secretValue, err := generator.GenerateSecret(cmd.Context(), length)
+			if err != nil {
+				return err
+			}
+
+			output := dependencies.Output
+			if output == nil {
+				output = io.Discard
+			}
+			_, writeErr := fmt.Fprintln(output, secretValue)
+			if writeErr != nil {
+				return writeErr
+			}
+
+			return nil
+		},
+	}
+
+	command.Flags().IntVar(&bytesLength, "bytes", 0, "Number of random bytes for the secret (minimum 32)")
+
+	return command
 }

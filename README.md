@@ -199,6 +199,16 @@ PINGUIN_GRPC_AUTH_TOKEN=my-secret-token \
   --scheduled-time "2025-01-02T15:04:05Z"
 ```
 
+#### Generate Authentication Secret
+
+The CLI can generate a strong bearer token for `NOTIFICATION_AUTH_TOKEN`:
+
+```bash
+./pinguin-cli generate-secret --bytes 48
+```
+
+Omit `--bytes` to use the default 48-byte entropy source (64 URL-safe characters). Larger values are accepted as long as they exceed the 32-byte minimum.
+
 ### Command‑Line Client Test
 
 A lightweight client test application is available under `cmd/client_test/main.go`. This client wraps the gRPC calls and demonstrates sending a notification. To run the client test, use:
