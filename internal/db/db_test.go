@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/temirov/pinguin/pkg/model"
+	"github.com/temirov/pinguin/internal/model"
 	"log/slog"
 )
 

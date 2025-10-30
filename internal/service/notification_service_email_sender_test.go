@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/temirov/pinguin/pkg/config"
+	"github.com/temirov/pinguin/internal/config"
 	"log/slog"
 )
 
