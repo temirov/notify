@@ -76,36 +76,31 @@ func (serviceInstance *notificationServiceImpl) SendNotification(ctx context.Con
 		return model.NotificationResponse{}, fmt.Errorf("unsupported notification type: %s", newNotification.NotificationType)
 	}
 
-	shouldAttemptImmediateSend := true
-	if request.ScheduledFor != nil && request.ScheduledFor.After(currentTime) {
-		shouldAttemptImmediateSend = false
-	}
-
 	var dispatchError error
-	if shouldAttemptImmediateSend {
-		switch newNotification.NotificationType {
-		case model.NotificationEmail:
-			dispatchError = serviceInstance.emailSender.SendEmail(ctx, newNotification.Recipient, newNotification.Subject, newNotification.Message)
-			if dispatchError == nil {
-				newNotification.Status = model.StatusSent
-				newNotification.LastAttemptedAt = currentTime
-				// When using SMTP no provider message ID is returned.
-			}
-		case model.NotificationSMS:
-			var providerMessageID string
-			providerMessageID, dispatchError = serviceInstance.smsSender.SendSms(ctx, newNotification.Recipient, newNotification.Message)
-			if dispatchError == nil {
-				newNotification.Status = model.StatusSent
-				newNotification.ProviderMessageID = providerMessageID
-				newNotification.LastAttemptedAt = currentTime
-			}
+	switch newNotification.NotificationType {
+	case model.NotificationEmail:
+		dispatchError = serviceInstance.emailSender.SendEmail(ctx, newNotification.Recipient, newNotification.Subject, newNotification.Message)
+		if dispatchError == nil {
+			newNotification.Status = model.StatusSent
+			newNotification.LastAttemptedAt = currentTime
+			// When using SMTP no provider message ID is returned.
 		}
-		if dispatchError != nil {
-			serviceInstance.logger.Error("Immediate dispatch failed", "error", dispatchError)
-			newNotification.Status = model.StatusFailed
+	case model.NotificationSMS:
+		var providerMessageID string
+		providerMessageID, dispatchError = serviceInstance.smsSender.SendSms(ctx, newNotification.Recipient, newNotification.Message)
+		if dispatchError == nil {
+			newNotification.Status = model.StatusSent
+			newNotification.ProviderMessageID = providerMessageID
 			newNotification.LastAttemptedAt = currentTime
 		}
 	}
+	if dispatchError != nil {
+		serviceInstance.logger.Error("Immediate dispatch failed", "error", dispatchError)
+		newNotification.Status = model.StatusFailed
+		newNotification.LastAttemptedAt = currentTime
+	}
+
+	newNotification.ScheduledFor = nil
 
 	if err := model.CreateNotification(ctx, serviceInstance.database, &newNotification); err != nil {
 		serviceInstance.logger.Error("Failed to store notification", "error", err)
@@ -151,9 +146,6 @@ func (serviceInstance *notificationServiceImpl) processRetries(ctx context.Conte
 		return
 	}
 	for _, notificationRecord := range notificationRecords {
-		if notificationRecord.ScheduledFor != nil && currentTime.Before(notificationRecord.ScheduledFor.UTC()) {
-			continue
-		}
 		// Apply exponential backoff: baseInterval * 2^(retry_count)
 		if notificationRecord.RetryCount > 0 {
 			backoffDuration := time.Duration(serviceInstance.retryIntervalSec) * time.Second * (1 << uint(notificationRecord.RetryCount))

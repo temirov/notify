@@ -70,11 +70,6 @@ type NotificationResponse struct {
 // NewNotification constructs a ready-to-insert DB Notification from a request, defaulting status=queued.
 func NewNotification(notificationID string, req NotificationRequest) Notification {
 	now := time.Now().UTC()
-	var scheduledFor *time.Time
-	if req.ScheduledFor != nil {
-		normalizedScheduled := req.ScheduledFor.UTC()
-		scheduledFor = &normalizedScheduled
-	}
 	return Notification{
 		NotificationID:   notificationID,
 		NotificationType: req.NotificationType,
@@ -82,7 +77,7 @@ func NewNotification(notificationID string, req NotificationRequest) Notificatio
 		Subject:          req.Subject,
 		Message:          req.Message,
 		Status:           StatusQueued,
-		ScheduledFor:     scheduledFor,
+		ScheduledFor:     nil,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -132,8 +127,8 @@ func SaveNotification(ctx context.Context, db *gorm.DB, n *Notification) error {
 func GetQueuedOrFailedNotifications(ctx context.Context, db *gorm.DB, maxRetries int, currentTime time.Time) ([]Notification, error) {
 	var notifications []Notification
 	err := db.WithContext(ctx).
-		Where("(status = ? OR status = ?) AND retry_count < ? AND (scheduled_for IS NULL OR scheduled_for <= ?)",
-			StatusQueued, StatusFailed, maxRetries, currentTime).
+		Where("(status = ? OR status = ?) AND retry_count < ?",
+			StatusQueued, StatusFailed, maxRetries).
 		Find(&notifications).Error
 	if err != nil {
 		return nil, err

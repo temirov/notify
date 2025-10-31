@@ -12,48 +12,23 @@ import (
 func TestNewNotificationConstructsQueuedRecord(t *testing.T) {
 	t.Helper()
 
-	scheduledTime := time.Now().UTC().Add(10 * time.Minute)
-
-	testCases := []struct {
-		name           string
-		scheduledInput *time.Time
-	}{
-		{name: "WithoutSchedule", scheduledInput: nil},
-		{name: "WithSchedule", scheduledInput: &scheduledTime},
+	request := NotificationRequest{
+		NotificationType: NotificationEmail,
+		Recipient:        "user@example.com",
+		Subject:          "Greetings",
+		Message:          "Body",
+		ScheduledFor:     timePointer(time.Now().UTC().Add(10 * time.Minute)),
 	}
 
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Helper()
-
-			request := NotificationRequest{
-				NotificationType: NotificationEmail,
-				Recipient:        "user@example.com",
-				Subject:          "Greetings",
-				Message:          "Body",
-				ScheduledFor:     testCase.scheduledInput,
-			}
-
-			record := NewNotification("notif-1", request)
-			if record.Status != StatusQueued {
-				t.Fatalf("expected queued status, got %s", record.Status)
-			}
-			if record.NotificationType != NotificationEmail {
-				t.Fatalf("unexpected type %s", record.NotificationType)
-			}
-
-			if testCase.scheduledInput == nil && record.ScheduledFor != nil {
-				t.Fatalf("expected nil scheduled time")
-			}
-			if testCase.scheduledInput != nil {
-				if record.ScheduledFor == nil {
-					t.Fatalf("expected scheduled time to be set")
-				}
-				if !record.ScheduledFor.Equal(testCase.scheduledInput.UTC()) {
-					t.Fatalf("scheduled time mismatch")
-				}
-			}
-		})
+	record := NewNotification("notif-1", request)
+	if record.Status != StatusQueued {
+		t.Fatalf("expected queued status, got %s", record.Status)
+	}
+	if record.NotificationType != NotificationEmail {
+		t.Fatalf("unexpected type %s", record.NotificationType)
+	}
+	if record.ScheduledFor != nil {
+		t.Fatalf("expected scheduled_for to be cleared")
 	}
 }
 
@@ -115,8 +90,8 @@ func TestDatabaseHelpersFilterAndRetrieve(t *testing.T) {
 		t.Fatalf("pending retrieval error: %v", pendingError)
 	}
 
-	if len(pending) != 2 {
-		t.Fatalf("expected two pending notifications, got %d", len(pending))
+	if len(pending) != 3 {
+		t.Fatalf("expected three pending notifications, got %d", len(pending))
 	}
 
 	fetched, fetchError := MustGetNotificationByID(ctx, database, "queued-now")

@@ -12,32 +12,24 @@ import (
 	"log/slog"
 )
 
-func TestSendNotificationRespectsSchedule(t *testing.T) {
+func TestSendNotificationIgnoresSchedule(t *testing.T) {
 	t.Helper()
 
 	testCases := []struct {
-		name                    string
-		scheduledOffset         *time.Duration
-		expectedStatus          string
-		expectImmediateDispatch bool
+		name            string
+		scheduledOffset *time.Duration
 	}{
 		{
-			name:                    "ImmediateSendWithoutSchedule",
-			scheduledOffset:         nil,
-			expectedStatus:          model.StatusSent,
-			expectImmediateDispatch: true,
+			name:            "ImmediateSendWithoutSchedule",
+			scheduledOffset: nil,
 		},
 		{
-			name:                    "ImmediateSendForPastSchedule",
-			scheduledOffset:         durationPointer(-1 * time.Minute),
-			expectedStatus:          model.StatusSent,
-			expectImmediateDispatch: true,
+			name:            "ImmediateSendForPastSchedule",
+			scheduledOffset: durationPointer(-1 * time.Minute),
 		},
 		{
-			name:                    "QueuedForFutureSchedule",
-			scheduledOffset:         durationPointer(2 * time.Minute),
-			expectedStatus:          model.StatusQueued,
-			expectImmediateDispatch: false,
+			name:            "ImmediateSendForFutureSchedule",
+			scheduledOffset: durationPointer(2 * time.Minute),
 		},
 	}
 
@@ -77,24 +69,16 @@ func TestSendNotificationRespectsSchedule(t *testing.T) {
 				t.Fatalf("SendNotification error: %v", responseError)
 			}
 
-			if response.Status != testCase.expectedStatus {
+			if response.Status != model.StatusSent {
 				t.Fatalf("unexpected status %s", response.Status)
 			}
 
-			if testCase.expectImmediateDispatch && emailSender.callCount != 1 {
-				t.Fatalf("expected immediate dispatch")
-			}
-			if !testCase.expectImmediateDispatch && emailSender.callCount != 0 {
-				t.Fatalf("unexpected immediate dispatch")
+			if emailSender.callCount != 1 {
+				t.Fatalf("expected immediate dispatch, got %d", emailSender.callCount)
 			}
 
-			if testCase.scheduledOffset == nil && response.ScheduledFor != nil {
+			if response.ScheduledFor != nil {
 				t.Fatalf("expected nil scheduledFor in response")
-			}
-			if testCase.scheduledOffset != nil {
-				if response.ScheduledFor == nil {
-					t.Fatalf("expected scheduledFor value in response")
-				}
 			}
 		})
 	}
@@ -169,7 +153,7 @@ func TestSendNotificationRejectsUnsupportedTypes(t *testing.T) {
 	}
 }
 
-func TestProcessRetriesRespectsSchedule(t *testing.T) {
+func TestProcessRetriesDispatchesQueuedNotifications(t *testing.T) {
 	t.Helper()
 
 	database := openIsolatedDatabase(t)
@@ -205,20 +189,8 @@ func TestProcessRetriesRespectsSchedule(t *testing.T) {
 	}
 
 	serviceInstance.processRetries(context.Background())
-	if emailSender.callCount != 0 {
-		t.Fatalf("expected zero dispatches before schedule")
-	}
-
-	pastScheduled := now.Add(-1 * time.Minute)
-	scheduledNotification.ScheduledFor = &pastScheduled
-	scheduledNotification.Status = model.StatusQueued
-	if saveError := model.SaveNotification(context.Background(), database, &scheduledNotification); saveError != nil {
-		t.Fatalf("save notification error: %v", saveError)
-	}
-
-	serviceInstance.processRetries(context.Background())
 	if emailSender.callCount != 1 {
-		t.Fatalf("expected one dispatch after schedule")
+		t.Fatalf("expected one dispatch during retry processing, got %d", emailSender.callCount)
 	}
 
 	fetchedNotification, fetchError := model.GetNotificationByID(context.Background(), database, notificationIdentifier)
