@@ -55,7 +55,7 @@ clients/cli/main.go:9:2: no required module provides package github.com/temirov/
         go get github.com/temirov/pinguin/clients/cli/internal/config
 ```
   - Resolved: Added a Go workspace tying the server and CLI modules together, introduced a regression test ensuring `go build clients/cli/main.go` succeeds from the repository root, and verified fmt/vet/test suites.
-- [ ] [PN-17] Pineguing cant place a DB file when .env calls for a different path
+- [ ] [PN-17] Pinguin cant place a DB file when .env calls for a different path
 ```
 16:15:52 tyemirov@computercat:~/Development/loopaware [improvement/LA-203-dashboard-footer] $ head -n3 .env.pinguin 
 DATABASE_PATH=/var/lib/pinguin/pinguin.db
