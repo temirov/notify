@@ -9,6 +9,9 @@ services:
     env_file:
       - .env.pinguin
     volumes:
-      - type: bind
-        source: ./volumes/pinguin-db
-        target: /var/lib/pinguin
+      - pinguin-data:/var/lib/pinguin
+    environment:
+      DATABASE_PATH: /var/lib/pinguin/pinguin.db
+
+volumes:
+  pinguin-data:
