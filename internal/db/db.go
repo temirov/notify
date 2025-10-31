@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/temirov/pinguin/internal/model"
@@ -14,6 +16,13 @@ import (
 
 func InitDB(dbPath string, logger *slog.Logger) (*gorm.DB, error) {
 	logger.Info("Initializing SQLite DB", "path", dbPath)
+
+	directory := filepath.Dir(dbPath)
+	if directory != "." && directory != "" {
+		if err := os.MkdirAll(directory, 0o755); err != nil {
+			return nil, fmt.Errorf("create database directory failed: %w", err)
+		}
+	}
 
 	gormLogger := &slogGormLogger{logger: logger}
 	database, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{

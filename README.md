@@ -162,6 +162,34 @@ Load the environment variables:
 export $(cat .env | xargs)
 ```
 
+### Docker Compose deployment
+
+The repository ships with `docker-compose.yaml` to run Pinguin in a container while storing the SQLite database on a host volume.
+
+1. Create `.env.pinguin` (you can copy your existing `.env`). Include every required configuration value from the table above and set `DATABASE_PATH=/var/lib/pinguin/pinguin.db` so the server writes into the mounted directory.
+2. Prepare the host directory for the database:
+
+   ```bash
+   mkdir -p volumes/pinguin-db
+   sudo chown 65532:65532 volumes/pinguin-db  # required on Linux; distroless image runs as UID 65532
+   ```
+
+   On macOS or Windows (Docker Desktop), the `chown` command is not required because the virtualization layer manages permissions.
+
+3. Build and start the stack:
+
+   ```bash
+   docker compose up --build
+   ```
+
+   The server listens on `localhost:50051` and writes the SQLite file to `volumes/pinguin-db/pinguin.db` on the host.
+
+4. Stop the stack when you are finished:
+
+   ```bash
+   docker compose down
+   ```
+
 ---
 
 ## Running the Server
