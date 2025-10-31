@@ -8,6 +8,17 @@ In this file the entries (issues) record newly discovered requests or changes, w
   - Resolved: Introduced optional gRPC `scheduled_time`, persisted scheduling metadata, updated workers, and added scheduling regression tests.
 - [x] [PN-08] Add a CLI client under new clients/cli folder. The CLI client shall be able to connect to the Pinguin Notification Service and submit/schedule notification delivery
   - Resolved: Added Cobra/Viper CLI with send command, injected gRPC client settings, scheduled-time parsing, and regression tests for request construction/error handling.
+- [ ] [PN-16] Add a front-end.
+   - have a config that defines admins, e.g. config.yml
+   ```
+   admins:
+   - temirov@gmail.com
+   - vadym@gmail.com
+   ```
+   - use this list to allow login through GAuss
+   - display a table of all the received and delivered messages
+   - have a filter for queued messages
+   - Use footers and headers and stylign similar to Loopaware
 
 ## Improvements
 
@@ -44,7 +55,19 @@ clients/cli/main.go:9:2: no required module provides package github.com/temirov/
         go get github.com/temirov/pinguin/clients/cli/internal/config
 ```
   - Resolved: Added a Go workspace tying the server and CLI modules together, introduced a regression test ensuring `go build clients/cli/main.go` succeeds from the repository root, and verified fmt/vet/test suites.
-
+- [ ] [PN-17] Pineguing cant place a DB file when .env calls for a different path
+```
+16:15:52 tyemirov@computercat:~/Development/loopaware [improvement/LA-203-dashboard-footer] $ head -n3 .env.pinguin 
+DATABASE_PATH=/var/lib/pinguin/pinguin.db
+LOG_LEVEL=INFO
+```
+The error is
+```
+pinguin    | time=2025-10-30T23:15:44.638Z level=INFO msg="Starting gRPC Notification Server on :50051"
+pinguin    | time=2025-10-30T23:15:44.638Z level=INFO msg="Initializing SQLite DB" path=/var/lib/pinguin/pinguin.db
+pinguin    | time=2025-10-30T23:15:44.638Z level=ERROR msg="Failed to initialize DB" error="open sqlite failed: unable to open database file: no such file or directory"
+pinguin exited with code 1 (restarting)
+```
 ## Maintenance
 
 - [x] [PN-01] Rename the project to Pinguin: repo, folder, all text references, all code reference. The project should be called Pinguin
