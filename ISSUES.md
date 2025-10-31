@@ -30,6 +30,8 @@ In this file the entries (issues) record newly discovered requests or changes, w
   - Resolved: Added pkg/secret crypto generator with length guards, wired `generate-secret` CLI command, and covered success/error flows with tests and documentation.
 - [x] [PN-12] Remove generate-secret command and all associated files and document the usage of built in tools (openssl rand -base64 32) to get the strong secret key
   - Resolved: Deleted the CLI secret generator and related package, and updated README guidance to use `openssl rand -base64 32` for token creation.
+- [x] [PN-18] Provide a Docker Compose example that persists the SQLite database on an external volume and documents how to run it end-to-end.
+  - Resolved: Added `docker-compose.yaml` with a bind-mounted SQLite directory, documented setup steps (including permissions) in README, and verified go test/go vet run cleanly.
 
 ## BugFixes
 

@@ -1,0 +1,14 @@
+services:
+  pinguin:
+    build:
+      context: .
+    container_name: pinguin
+    restart: unless-stopped
+    ports:
+      - "50051:50051"
+    env_file:
+      - .env.pinguin
+    volumes:
+      - type: bind
+        source: ./volumes/pinguin-db
+        target: /var/lib/pinguin
