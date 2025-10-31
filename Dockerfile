@@ -11,12 +11,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \
     go build -o /workspace/bin/pinguin ./cmd/server
-RUN mkdir -p /workspace/runtime-data
 
 FROM gcr.io/distroless/base-debian12
 
 COPY --from=builder /workspace/bin/pinguin /usr/local/bin/pinguin
-COPY --from=builder /workspace/runtime-data /var/lib/pinguin
 
 EXPOSE 50051
 
