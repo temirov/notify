@@ -31,7 +31,7 @@ In this file the entries (issues) record newly discovered requests or changes, w
 - [x] [PN-12] Remove generate-secret command and all associated files and document the usage of built in tools (openssl rand -base64 32) to get the strong secret key
   - Resolved: Deleted the CLI secret generator and related package, and updated README guidance to use `openssl rand -base64 32` for token creation.
 - [x] [PN-18] Provide a Docker Compose example that persists the SQLite database on an external volume and documents how to run it end-to-end.
-  - Resolved: Added `docker-compose.yaml` with a named Docker volume, shipped `.env.pinguin.example`, ensured the container image seeds `/var/lib/pinguin` with UID 65532 ownership for permission-safe mounts, documented compose usage in README, and verified go test/go vet run cleanly.
+  - Resolved: Added `docker-compose.yaml` with a named Docker volume, shipped `.env.pinguin.example`, configured the container to run as root so the volume is writable without manual ownership changes, documented compose usage in README, and verified go test/go vet run cleanly.
 
 ## BugFixes
 
