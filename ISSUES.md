@@ -55,7 +55,7 @@ clients/cli/main.go:9:2: no required module provides package github.com/temirov/
         go get github.com/temirov/pinguin/clients/cli/internal/config
 ```
   - Resolved: Added a Go workspace tying the server and CLI modules together, introduced a regression test ensuring `go build clients/cli/main.go` succeeds from the repository root, and verified fmt/vet/test suites.
-- [ ] [PN-17] Pinguin cant place a DB file when .env calls for a different path
+- [x] [PN-17] Pinguin cant place a DB file when .env calls for a different path
 ```
 16:15:52 tyemirov@computercat:~/Development/loopaware [improvement/LA-203-dashboard-footer] $ head -n3 .env.pinguin 
 DATABASE_PATH=/var/lib/pinguin/pinguin.db
@@ -69,6 +69,7 @@ pinguin    | time=2025-10-30T23:15:44.638Z level=ERROR msg="Failed to initialize
 pinguin exited with code 1 (restarting)
 ```
 We shall be able to place the DB file on a docker image in order to preserve data continuity, and if we need to define the limits, we shall do so in README.md
+  - Resolved: Added regression coverage for nested database paths, ensured `InitDB` creates parent directories before opening SQLite, and verified gofmt/go vet/go test ./... .
 
 
 ## Maintenance
