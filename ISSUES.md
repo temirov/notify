@@ -68,6 +68,9 @@ pinguin    | time=2025-10-30T23:15:44.638Z level=INFO msg="Initializing SQLite D
 pinguin    | time=2025-10-30T23:15:44.638Z level=ERROR msg="Failed to initialize DB" error="open sqlite failed: unable to open database file: no such file or directory"
 pinguin exited with code 1 (restarting)
 ```
+We shall be able to place the DB file on a docker image in order to preserve data continuity, and if we need to define the limits, we shall do so in README.md
+
+
 ## Maintenance
 
 - [x] [PN-01] Rename the project to Pinguin: repo, folder, all text references, all code reference. The project should be called Pinguin
