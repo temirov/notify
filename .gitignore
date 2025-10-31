@@ -20,6 +20,7 @@
 
 # env file
 .env
+.env.pinguin
 .idea/
 bin/
 
