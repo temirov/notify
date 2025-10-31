@@ -181,7 +181,7 @@ The repository ships with `docker-compose.yaml` to run Pinguin in a container wh
    docker compose up --build
    ```
 
-   The server listens on `localhost:50051` and writes the SQLite file to the Docker-managed volume.
+   The server listens on `localhost:50051` and writes the SQLite file to the Docker-managed volume. The image seeds `/var/lib/pinguin` with UID `65532` ownership so the mounted volume inherits the correct permissions automatically.
 
 3. Stop the stack when you are finished:
 
