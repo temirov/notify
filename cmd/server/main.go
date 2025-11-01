@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
@@ -51,6 +53,15 @@ func (server *notificationServiceServer) SendNotification(ctx context.Context, r
 		scheduledFor = &normalizedScheduled
 	}
 
+	recipientDigest := anonymizeRecipient(req.Recipient)
+	server.logger.Info(
+		"notification_request_received",
+		"notification_type", req.NotificationType.String(),
+		"subject", req.Subject,
+		"recipient_digest", recipientDigest,
+		"scheduled", scheduledFor != nil,
+	)
+
 	modelRequest := model.NotificationRequest{
 		NotificationType: internalType,
 		Recipient:        req.Recipient,
@@ -64,6 +75,13 @@ func (server *notificationServiceServer) SendNotification(ctx context.Context, r
 		server.logger.Error("Service SendNotification error", "error", err)
 		return nil, err
 	}
+
+	server.logger.Info(
+		"notification_request_completed",
+		"notification_id", modelResponse.NotificationID,
+		"status", modelResponse.Status,
+		"recipient_digest", recipientDigest,
+	)
 
 	return mapModelToGrpcResponse(modelResponse), nil
 }
@@ -124,6 +142,15 @@ func mapModelToGrpcResponse(modelResp model.NotificationResponse) *grpcapi.Notif
 		UpdatedAt:         modelResp.UpdatedAt.Format(time.RFC3339),
 		ScheduledTime:     scheduledTime,
 	}
+}
+
+func anonymizeRecipient(value string) string {
+	trimmed := strings.TrimSpace(strings.ToLower(value))
+	if trimmed == "" {
+		return ""
+	}
+	digest := sha256.Sum256([]byte(trimmed))
+	return hex.EncodeToString(digest[:8])
 }
 
 func main() {

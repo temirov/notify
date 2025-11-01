@@ -125,6 +125,12 @@ func (serviceInstance *notificationServiceImpl) SendNotification(ctx context.Con
 		serviceInstance.logger.Error("Failed to store notification", "error", err)
 		return model.NotificationResponse{}, err
 	}
+	serviceInstance.logger.Info(
+		"notification_persisted",
+		"notification_id", newNotification.NotificationID,
+		"notification_type", newNotification.NotificationType,
+		"status", newNotification.Status,
+	)
 	return model.NewNotificationResponse(newNotification), nil
 }
 
