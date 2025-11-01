@@ -53,11 +53,12 @@ func (server *notificationServiceServer) SendNotification(ctx context.Context, r
 		scheduledFor = &normalizedScheduled
 	}
 
-	recipientDigest := anonymizeRecipient(req.Recipient)
+	recipientDigest := digestForLogging(req.Recipient)
+	subjectDigest := digestForLogging(req.Subject)
 	server.logger.Info(
 		"notification_request_received",
 		"notification_type", req.NotificationType.String(),
-		"subject", req.Subject,
+		"subject_digest", subjectDigest,
 		"recipient_digest", recipientDigest,
 		"scheduled", scheduledFor != nil,
 	)
@@ -144,7 +145,7 @@ func mapModelToGrpcResponse(modelResp model.NotificationResponse) *grpcapi.Notif
 	}
 }
 
-func anonymizeRecipient(value string) string {
+func digestForLogging(value string) string {
 	trimmed := strings.TrimSpace(strings.ToLower(value))
 	if trimmed == "" {
 		return ""
