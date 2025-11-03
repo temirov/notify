@@ -8,11 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/temirov/pinguin/pkg/grpcapi"
+	"log/slog"
+
+	"github.com/tyemirov/pinguin/pkg/grpcapi"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
-	"log/slog"
 )
 
 var ErrInvalidSettings = errors.New("invalid_client_settings")
