@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/temirov/pinguin/internal/config"
-	"github.com/temirov/pinguin/internal/model"
-	"gorm.io/gorm"
 	"log/slog"
+
+	"github.com/tyemirov/pinguin/internal/config"
+	"github.com/tyemirov/pinguin/internal/model"
+	"gorm.io/gorm"
 )
 
 // NotificationService defines the external interface for processing notifications.

@@ -8,9 +8,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/temirov/pinguin/pkg/client"
-	"github.com/temirov/pinguin/pkg/grpcapi"
 	"log/slog"
+
+	"github.com/tyemirov/pinguin/pkg/client"
+	"github.com/tyemirov/pinguin/pkg/grpcapi"
 )
 
 func main() {
