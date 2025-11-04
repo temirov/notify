@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/temirov/pinguin/internal/model"
+	"log/slog"
+
+	"github.com/tyemirov/pinguin/internal/model"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"log/slog"
 )
 
 func TestSendNotificationRespectsSchedule(t *testing.T) {

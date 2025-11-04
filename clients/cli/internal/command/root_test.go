@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/temirov/pinguin/pkg/grpcapi"
+	"github.com/tyemirov/pinguin/pkg/grpcapi"
 )
 
 type stubClient struct {
