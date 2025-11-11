@@ -2,23 +2,14 @@
 
 In this file the entries (issues) record newly discovered requests or changes, with their outcomes. No instructive content lives here. Read @NOTES.md for the process to follow when fixing issues.
 
+Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES.md. Start working on open issues. Work autonomously and stack up PRs.
+
 ## Features
 
 - [x] [PN-05] Add a scheduler to the API and the implementation, alowing to schedule when the notifications are sent
   - Resolved: Introduced optional gRPC `scheduled_time`, persisted scheduling metadata, updated workers, and added scheduling regression tests.
 - [x] [PN-08] Add a CLI client under new clients/cli folder. The CLI client shall be able to connect to the Pinguin Notification Service and submit/schedule notification delivery
   - Resolved: Added Cobra/Viper CLI with send command, injected gRPC client settings, scheduled-time parsing, and regression tests for request construction/error handling.
-- [ ] [PN-16] Add a front-end.
-   - have a config that defines admins, e.g. config.yml
-   ```
-   admins:
-   - temirov@gmail.com
-   - vadym@gmail.com
-   ```
-   - use this list to allow login through GAuss
-   - display a table of all the received and delivered messages
-   - have a filter for queued messages
-   - Use footers and headers and stylign similar to Loopaware
 
 ## Improvements
 
@@ -197,4 +188,14 @@ We shall be able to place the DB file on a docker image in order to preserve dat
   ```
   - Resolved: Updated README and the sample `.env` to enumerate every required variable (including GRPC and timeout settings) with recommended defaults.
 
-## Planning (do not work on these, not ready)
+## Planning
+*do not work on these, not ready*
+
+- [ ] Add a front-end.
+  - The front end is a stand alone web page. It uses Google Sign and TAuss backend for JWT generation and authentication
+  - The web page displays a table of all the received messages. it has a column for status: delivered/queued, a time of dlivery, a sender
+  - The table allows editing of queued messages
+  - Styling: 
+    1. Use footers and headers and stylign from mpr-ui
+    2. Support theme switch
+    3. Have a landing page
