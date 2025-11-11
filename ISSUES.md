@@ -194,8 +194,11 @@ We shall be able to place the DB file on a docker image in order to preserve dat
 - [ ] Add a front-end.
   - The front end is a stand alone web page. It uses Google Sign and TAuss backend for JWT generation and authentication
   - The web page displays a table of all the received messages. it has a column for status: delivered/queued, a time of dlivery, a sender
-  - The table allows editing of queued messages
+  - The table allows editing of queued messages: changing the time of delivery or cancelling the delivery. The status column will have a cancelled and errored statuses.
   - Styling: 
     1. Use footers and headers and stylign from mpr-ui
     2. Support theme switch
     3. Have a landing page
+  - Backend
+  1. Integrate with TAuth service for the front end JWT verification (use the same secret). The TAuth service and its documentation is under @tools/TAuth
+  2. Prepare docker compose orchestration

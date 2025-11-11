@@ -23,5 +23,6 @@
 .env.pinguin
 .idea/
 bin/
+tools/
 
 PLAN.md
