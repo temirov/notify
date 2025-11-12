@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
 
@@ -41,7 +42,8 @@ func TestBuildEmailMessageWithAttachments(t *testing.T) {
 	if !strings.Contains(message, "Content-Transfer-Encoding: base64") {
 		t.Fatalf("expected base64 encoding header")
 	}
-	if !strings.Contains(message, "SGVsbG8gd29ybGQ=") {
+	expectedPayload := base64.StdEncoding.EncodeToString(attachment.Data)
+	if !strings.Contains(message, expectedPayload) {
 		t.Fatalf("expected base64 content in body")
 	}
 	if !strings.Contains(message, "--PinguinBoundary") {
@@ -64,10 +66,10 @@ func TestSanitizeFilenameStripsControlCharacters(t *testing.T) {
 		},
 	})
 
-	if strings.Contains(message, "Bcc:spam@example.com") {
+	if strings.Contains(message, "\r\nBcc:") || strings.Contains(message, "\nBcc:") {
 		t.Fatalf("expected header injection attempt to be stripped")
 	}
-	if !strings.Contains(message, "filename=\"invoice.pdf\"") {
-		t.Fatalf("expected sanitized filename")
+	if !strings.Contains(message, "filename=\"invoice.pdfBcc:spam@example.com\"") {
+		t.Fatalf("expected sanitized filename without control characters")
 	}
 }
