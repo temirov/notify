@@ -27,7 +27,7 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
   Plan tasks:
     - [x] PN-100.A — Extend proto + domain models with `cancelled`/`errored` statuses, add list/update/cancel service methods, and cover new logic with table-driven tests. (proto + domain enums updated, new service APIs + retries covered by unit/integration tests)
     - [x] PN-100.B — Introduce a Gin HTTP server that validates TAuth cookies (via `sessionvalidator`), exposes `/api/notifications` CRUD endpoints, and serves static assets alongside the gRPC process. (Added config + Gin server with authenticated `/api/notifications` list/reschedule/cancel endpoints, session validation, static hosting, and docs/tests.)
-    - [ ] PN-100.C — Build the `/web` front-end skeleton (landing + dashboard pages, `constants.js`, `types.d.js`, `core/`, `ui/`, `app.js`) using Alpine factories and mpr-ui header/footer components.
+    - [x] PN-100.C — Build the `/web` front-end skeleton (landing + dashboard pages, `constants.js`, `types.d.js`, `core/`, `ui/`, `app.js`) using Alpine factories and mpr-ui header/footer components. (Added landing + dashboard HTML, shared CSS, runtime config bootstrap, auth-aware Alpine components, and API client wiring.)
     - [ ] PN-100.D — Implement the dashboard notifications table with inline edit/cancel flows, scheduled-time editor modal, status badges, and DOM-scoped Alpine events.
     - [ ] PN-100.E — Wire Google Identity Services + TAuth `auth-client.js` on both pages, manage auth state via Alpine store/BroadcastChannel, and enforce route guards/redirects.
     - [ ] PN-100.F — Add Playwright smoke tests that stub TAuth, verify landing-page login CTA, dashboard gating, table rendering, schedule edit, and cancel behavior.

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pinguin Notification Service</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css"
+    />
+    <link rel="stylesheet" href="/assets/css/base.css" />
+    <script>
+      window.__PINGUIN_CONFIG__ = window.__PINGUIN_CONFIG__ || {
+        apiBaseUrl: '/api',
+        tauthBaseUrl: 'http://localhost:8081',
+        googleClientId: 'YOUR_GOOGLE_WEB_CLIENT_ID',
+        landingUrl: '/index.html',
+        dashboardUrl: '/dashboard.html',
+      };
+      (function loadAuthClient() {
+        const script = document.createElement('script');
+        script.defer = true;
+        const base = (window.__PINGUIN_CONFIG__.tauthBaseUrl || '').replace(/\/$/, '');
+        script.src = `${base || 'http://localhost:8081'}/static/auth-client.js`;
+        document.head.appendChild(script);
+      })();
+    </script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <body data-page="landing">
+    <mpr-header
+      brand-label="Pinguin"
+      brand-href="/"
+      nav-links='[{"label":"Docs","href":"#features"},{"label":"Status","href":"#status"}]'
+      theme-config='{"initialMode":"light"}'
+    ></mpr-header>
+    <main>
+      <section class="anchor-section hero" x-data="landingAuthPanel()" x-init="init()">
+        <p class="eyebrow" id="features">Trusted delivery infrastructure</p>
+        <h1>Deliver email and SMS notifications with confidence</h1>
+        <p>
+          Authenticate with Google Identity, preview schedules, and manage queued notifications from a single
+          workspace.
+        </p>
+        <div class="panel" aria-live="polite">
+          <p class="notice" x-text="notice"></p>
+          <div class="google-button-host" x-ref="googleButton" data-testid="google-button-host"></div>
+          <button
+            class="button primary"
+            type="button"
+            x-on:click="handleSignInClick"
+            :disabled="isBusy"
+            data-testid="landing-sign-in"
+          >
+            <span x-text="isBusy ? STRINGS.auth.signingIn : STRINGS.landing.ctaPrimary"></span>
+          </button>
+          <p class="small" style="margin-top: 0.5rem" x-text="STRINGS.landing.securityCopy"></p>
+        </div>
+      </section>
+      <section class="anchor-section" id="status">
+        <div class="panel">
+          <h2 class="section-title">Unified delivery timeline</h2>
+          <ul style="list-style: none; padding: 0; margin: 0; display: grid; gap: 1rem">
+            <li>
+              <strong>✨ Real-time visibility</strong>
+              <p class="text-muted">
+                See queued, sent, cancelled, and errored notifications without leaving the browser.
+              </p>
+            </li>
+            <li>
+              <strong>🕒 Inline rescheduling</strong>
+              <p class="text-muted">Adjust delivery slots or cancel queued jobs before they reach providers.</p>
+            </li>
+            <li>
+              <strong>🔐 Session security</strong>
+              <p class="text-muted">Google Identity + TAuth keep every session protected behind HttpOnly cookies.</p>
+            </li>
+          </ul>
+        </div>
+      </section>
+    </main>
+    <mpr-footer
+      theme-switcher="toggle"
+      prefix-text="Pinguin by Marco Polo Research Lab"
+      privacy-link-label="Security"
+      privacy-modal-content="<p>Authentication powered by TAuth with nonce-protected Google Sign-In.</p>"
+    ></mpr-footer>
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>
