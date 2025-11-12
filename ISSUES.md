@@ -31,7 +31,8 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
     - [ ] PN-100.D — Implement the dashboard notifications table with inline edit/cancel flows, scheduled-time editor modal, status badges, and DOM-scoped Alpine events.
     - [ ] PN-100.E — Wire Google Identity Services + TAuth `auth-client.js` on both pages, manage auth state via Alpine store/BroadcastChannel, and enforce route guards/redirects.
     - [ ] PN-100.F — Add Playwright smoke tests that stub TAuth, verify landing-page login CTA, dashboard gating, table rendering, schedule edit, and cancel behavior.
-    - [ ] PN-100.G — Expand `docker-compose.yaml` to run Pinguin + TAuth + static web host with shared JWT secret, and document the setup (env vars, npm test, new endpoints) in README/CHANGELOG.
+    - [ ] PN-100.G — Expand `docker-compose.yaml` to run Pinguin + TAuth + static web host with shared JWT secret, and document the setup (env vars, npm test, new endpoints) in README/CHANGELOG. Use ghttp as a web server (the code/documentation are provided under tools/ for the reference)
+  N.B. All code provided under tools/ is for information only and the tools/folder can never be referenced but the services shakll be referenced from their respective locations (github, CDN etc)
 
 ## Improvements (200–299)
 
