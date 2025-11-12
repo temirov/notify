@@ -51,3 +51,23 @@ func TestBuildEmailMessageWithAttachments(t *testing.T) {
 		t.Fatalf("expected closing boundary terminator")
 	}
 }
+
+func TestSanitizeFilenameStripsControlCharacters(t *testing.T) {
+	t.Helper()
+
+	injected := "invoice.pdf\r\nBcc:spam@example.com"
+	message := buildEmailMessage("from@example.com", "to@example.com", "Subject", "Body", []model.EmailAttachment{
+		{
+			Filename:    injected,
+			ContentType: "application/pdf",
+			Data:        []byte("payload"),
+		},
+	})
+
+	if strings.Contains(message, "Bcc:spam@example.com") {
+		t.Fatalf("expected header injection attempt to be stripped")
+	}
+	if !strings.Contains(message, "filename=\"invoice.pdf\"") {
+		t.Fatalf("expected sanitized filename")
+	}
+}

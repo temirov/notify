@@ -171,5 +171,22 @@ func sanitizeFilename(filename string) string {
 	if trimmed == "" {
 		return "attachment"
 	}
-	return strings.ReplaceAll(trimmed, "\"", "")
+
+	var builder strings.Builder
+	for _, character := range trimmed {
+		if character < 32 || character == 127 {
+			continue
+		}
+		switch character {
+		case '"', '\\':
+			continue
+		default:
+			builder.WriteRune(character)
+		}
+	}
+	sanitized := strings.TrimSpace(builder.String())
+	if sanitized == "" {
+		return "attachment"
+	}
+	return sanitized
 }
