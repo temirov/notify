@@ -1,0 +1,111 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/temirov/pinguin/internal/model"
+	"github.com/temirov/pinguin/pkg/scheduler"
+	"gorm.io/gorm"
+)
+
+type notificationRetryStore struct {
+	database *gorm.DB
+}
+
+func newNotificationRetryStore(database *gorm.DB) *notificationRetryStore {
+	return &notificationRetryStore{database: database}
+}
+
+func (store *notificationRetryStore) PendingJobs(ctx context.Context, maxRetries int, now time.Time) ([]scheduler.Job, error) {
+	records, err := model.GetQueuedOrFailedNotifications(ctx, store.database, maxRetries, now)
+	if err != nil {
+		return nil, err
+	}
+	jobs := make([]scheduler.Job, 0, len(records))
+	for index := range records {
+		record := records[index]
+		jobs = append(jobs, scheduler.Job{
+			ID:              record.NotificationID,
+			ScheduledFor:    record.ScheduledFor,
+			RetryCount:      record.RetryCount,
+			LastAttemptedAt: record.LastAttemptedAt,
+			Payload:         &records[index],
+		})
+	}
+	return jobs, nil
+}
+
+func (store *notificationRetryStore) ApplyAttemptResult(ctx context.Context, job scheduler.Job, update scheduler.AttemptUpdate) error {
+	record, err := store.notificationFromJob(job)
+	if err != nil {
+		return err
+	}
+	record.Status = update.Status
+	record.ProviderMessageID = update.ProviderMessageID
+	record.RetryCount = update.RetryCount
+	record.LastAttemptedAt = update.LastAttemptedAt
+	return model.SaveNotification(ctx, store.database, record)
+}
+
+func (store *notificationRetryStore) notificationFromJob(job scheduler.Job) (*model.Notification, error) {
+	if job.Payload == nil {
+		return nil, fmt.Errorf("missing notification payload for job %s", job.ID)
+	}
+	notificationRecord, ok := job.Payload.(*model.Notification)
+	if !ok {
+		return nil, fmt.Errorf("invalid notification payload type for job %s", job.ID)
+	}
+	return notificationRecord, nil
+}
+
+type notificationDispatcher struct {
+	serviceInstance *notificationServiceImpl
+}
+
+func newNotificationDispatcher(serviceInstance *notificationServiceImpl) *notificationDispatcher {
+	return &notificationDispatcher{serviceInstance: serviceInstance}
+}
+
+func (dispatcher *notificationDispatcher) Attempt(ctx context.Context, job scheduler.Job) (scheduler.DispatchResult, error) {
+	notificationRecord, err := dispatcher.recordFromJob(job)
+	if err != nil {
+		return scheduler.DispatchResult{}, err
+	}
+
+	switch notificationRecord.NotificationType {
+	case model.NotificationEmail:
+		emailAttachments := model.ToEmailAttachments(notificationRecord.Attachments)
+		sendErr := dispatcher.serviceInstance.emailSender.SendEmail(ctx, notificationRecord.Recipient, notificationRecord.Subject, notificationRecord.Message, emailAttachments)
+		if sendErr != nil {
+			return scheduler.DispatchResult{}, sendErr
+		}
+		return scheduler.DispatchResult{Status: model.StatusSent}, nil
+	case model.NotificationSMS:
+		if dispatcher.serviceInstance.smsSender == nil || !dispatcher.serviceInstance.smsEnabled {
+			dispatcher.serviceInstance.logger.Warn("Skipping SMS retry because delivery is disabled", "notification_id", notificationRecord.NotificationID)
+			return scheduler.DispatchResult{Status: model.StatusFailed}, ErrSMSDisabled
+		}
+		providerMessageID, sendErr := dispatcher.serviceInstance.smsSender.SendSms(ctx, notificationRecord.Recipient, notificationRecord.Message)
+		if sendErr != nil {
+			return scheduler.DispatchResult{}, sendErr
+		}
+		return scheduler.DispatchResult{
+			Status:            model.StatusSent,
+			ProviderMessageID: providerMessageID,
+		}, nil
+	default:
+		dispatcher.serviceInstance.logger.Error("Unsupported notification type during retry", "notification_id", notificationRecord.NotificationID)
+		return scheduler.DispatchResult{Status: model.StatusFailed}, fmt.Errorf("unsupported notification type: %s", notificationRecord.NotificationType)
+	}
+}
+
+func (dispatcher *notificationDispatcher) recordFromJob(job scheduler.Job) (*model.Notification, error) {
+	notificationRecord, ok := job.Payload.(*model.Notification)
+	if !ok || notificationRecord == nil {
+		return nil, errors.New("notification payload missing from job")
+	}
+	return notificationRecord, nil
+}
