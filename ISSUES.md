@@ -73,6 +73,8 @@ We shall be able to place the DB file on a docker image in order to preserve dat
 
 ## Maintenance
 
+- [x] [PN-22] Provide full GoDoc coverage for client-facing packages so integrators can rely on `go doc` for guidance.
+  - Resolved: Added package comments/doc.go files plus exported identifier docs for `pkg/client`, `pkg/attachments`, `pkg/grpcapi`, `pkg/grpcutil`, and `pkg/logging`, ensuring `go doc` surfaces integration guidance.
 - [x] [PN-01] Rename the project to Pinguin: repo, folder, all text references, all code reference. The project should be called Pinguin
   - Resolved: Renamed the module, regenerated gRPC assets, retitled documentation, and updated binaries/tests to use the Pinguin identity.
 - [x] [PN-02] Cover the project with tests. The code must be fully tested

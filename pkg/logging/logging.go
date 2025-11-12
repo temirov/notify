@@ -6,7 +6,8 @@ import (
 	"strings"
 )
 
-// NewLogger creates a slog.Logger based on LOG_LEVEL
+// NewLogger creates a slog.Logger configured according to the provided log
+// level string (DEBUG/INFO/WARN/ERROR), defaulting to INFO.
 func NewLogger(levelString string) *slog.Logger {
 	var level slog.Level
 	switch strings.ToUpper(levelString) {
