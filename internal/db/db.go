@@ -32,7 +32,7 @@ func InitDB(dbPath string, logger *slog.Logger) (*gorm.DB, error) {
 		return nil, fmt.Errorf("open sqlite failed: %w", err)
 	}
 
-	if err := database.AutoMigrate(&model.Notification{}); err != nil {
+	if err := database.AutoMigrate(&model.Notification{}, &model.NotificationAttachment{}); err != nil {
 		return nil, fmt.Errorf("migration failed: %w", err)
 	}
 

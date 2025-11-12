@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/temirov/pinguin/pkg/attachments"
 	"github.com/temirov/pinguin/pkg/client"
 	"github.com/temirov/pinguin/pkg/grpcapi"
 	"log/slog"
@@ -17,6 +19,8 @@ func main() {
 	recipient := flag.String("to", "", "Recipient email address")
 	subject := flag.String("subject", "", "Email subject")
 	message := flag.String("message", "", "Email message body")
+	var attachmentInputs multiValueFlag
+	flag.Var(&attachmentInputs, "attachment", "Attachment path (repeatable). Use path::content-type to override MIME type")
 	flag.Parse()
 
 	if *recipient == "" || *subject == "" || *message == "" {
@@ -71,6 +75,15 @@ func main() {
 		Message:          *message,
 	}
 
+	attachmentPayloads, err := attachments.Load([]string(attachmentInputs))
+	if err != nil {
+		logger.Error("Failed to load attachments", "error", err)
+		os.Exit(1)
+	}
+	if len(attachmentPayloads) > 0 {
+		notificationRequest.Attachments = attachmentPayloads
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(operationTimeoutSec)*time.Second)
 	defer cancel()
 
@@ -96,4 +109,18 @@ func readIntEnv(key string, defaultValue int) (int, error) {
 		return 0, fmt.Errorf("value must be positive")
 	}
 	return parsed, nil
+}
+
+type multiValueFlag []string
+
+func (flagValues *multiValueFlag) String() string {
+	if flagValues == nil || len(*flagValues) == 0 {
+		return ""
+	}
+	return strings.Join(*flagValues, ",")
+}
+
+func (flagValues *multiValueFlag) Set(value string) error {
+	*flagValues = append(*flagValues, value)
+	return nil
 }

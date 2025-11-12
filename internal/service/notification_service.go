@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/temirov/pinguin/internal/config"
@@ -23,6 +24,13 @@ type NotificationService interface {
 }
 
 var ErrSMSDisabled = errors.New("sms delivery disabled: missing Twilio credentials")
+
+const (
+	maxAttachmentCount           = 10
+	maxAttachmentSizeBytes       = 5 * 1024 * 1024  // 5 MiB per file
+	maxTotalAttachmentSizeBytes  = 25 * 1024 * 1024 // 25 MiB aggregate cap
+	defaultAttachmentContentType = "application/octet-stream"
+)
 
 type notificationServiceImpl struct {
 	database         *gorm.DB
@@ -81,6 +89,13 @@ func (serviceInstance *notificationServiceImpl) SendNotification(ctx context.Con
 		return model.NotificationResponse{}, ErrSMSDisabled
 	}
 
+	normalizedAttachments, attachmentsErr := normalizeAttachments(request.NotificationType, request.Attachments)
+	if attachmentsErr != nil {
+		serviceInstance.logger.Error("Attachment validation failed", "error", attachmentsErr)
+		return model.NotificationResponse{}, attachmentsErr
+	}
+	request.Attachments = normalizedAttachments
+
 	notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
 	newNotification := model.NewNotification(notificationID, request)
 
@@ -95,7 +110,7 @@ func (serviceInstance *notificationServiceImpl) SendNotification(ctx context.Con
 	if shouldAttemptImmediateSend {
 		switch newNotification.NotificationType {
 		case model.NotificationEmail:
-			dispatchError = serviceInstance.emailSender.SendEmail(ctx, newNotification.Recipient, newNotification.Subject, newNotification.Message)
+			dispatchError = serviceInstance.emailSender.SendEmail(ctx, newNotification.Recipient, newNotification.Subject, newNotification.Message, request.Attachments)
 			if dispatchError == nil {
 				newNotification.Status = model.StatusSent
 				newNotification.LastAttemptedAt = currentTime
@@ -196,7 +211,8 @@ func (serviceInstance *notificationServiceImpl) processRetries(ctx context.Conte
 		var dispatchError error
 		switch notificationRecord.NotificationType {
 		case model.NotificationEmail:
-			dispatchError = serviceInstance.emailSender.SendEmail(ctx, notificationRecord.Recipient, notificationRecord.Subject, notificationRecord.Message)
+			emailAttachments := model.ToEmailAttachments(notificationRecord.Attachments)
+			dispatchError = serviceInstance.emailSender.SendEmail(ctx, notificationRecord.Recipient, notificationRecord.Subject, notificationRecord.Message, emailAttachments)
 			if dispatchError == nil {
 				notificationRecord.Status = model.StatusSent
 				notificationRecord.ProviderMessageID = ""
@@ -222,4 +238,49 @@ func (serviceInstance *notificationServiceImpl) processRetries(ctx context.Conte
 			serviceInstance.logger.Error("Failed to update notification after retry", "notification_id", notificationRecord.NotificationID, "error", saveError)
 		}
 	}
+}
+
+func normalizeAttachments(notificationType model.NotificationType, attachments []model.EmailAttachment) ([]model.EmailAttachment, error) {
+	if len(attachments) == 0 {
+		return nil, nil
+	}
+	if notificationType != model.NotificationEmail {
+		return nil, fmt.Errorf("attachments supported only for email notifications")
+	}
+	if len(attachments) > maxAttachmentCount {
+		return nil, fmt.Errorf("too many attachments: max %d", maxAttachmentCount)
+	}
+
+	totalSize := 0
+	normalized := make([]model.EmailAttachment, 0, len(attachments))
+	for idx, attachment := range attachments {
+		filename := strings.TrimSpace(attachment.Filename)
+		if filename == "" {
+			return nil, fmt.Errorf("attachment %d missing filename", idx+1)
+		}
+		dataCopy := append([]byte(nil), attachment.Data...)
+		payloadSize := len(dataCopy)
+		if payloadSize == 0 {
+			return nil, fmt.Errorf("attachment %q has empty data", filename)
+		}
+		if payloadSize > maxAttachmentSizeBytes {
+			return nil, fmt.Errorf("attachment %q exceeds %d bytes", filename, maxAttachmentSizeBytes)
+		}
+		totalSize += payloadSize
+
+		contentType := strings.TrimSpace(attachment.ContentType)
+		if contentType == "" {
+			contentType = defaultAttachmentContentType
+		}
+		normalized = append(normalized, model.EmailAttachment{
+			Filename:    filename,
+			ContentType: contentType,
+			Data:        dataCopy,
+		})
+	}
+
+	if totalSize > maxTotalAttachmentSizeBytes {
+		return nil, fmt.Errorf("attachments exceed total limit of %d bytes", maxTotalAttachmentSizeBytes)
+	}
+	return normalized, nil
 }
