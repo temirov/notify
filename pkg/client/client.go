@@ -16,8 +16,12 @@ import (
 	"log/slog"
 )
 
+// ErrInvalidSettings indicates the provided Settings inputs do not meet
+// required invariants (address, token, or timeout configuration).
 var ErrInvalidSettings = errors.New("invalid_client_settings")
 
+// Settings captures the reusable connection/authentication parameters for
+// NotificationClient instances. Use NewSettings to construct a validated copy.
 type Settings struct {
 	serverAddress     string
 	authToken         string
@@ -25,6 +29,8 @@ type Settings struct {
 	operationTimeout  time.Duration
 }
 
+// NewSettings validates and normalizes connection/authentication parameters
+// used by NotificationClient.
 func NewSettings(serverAddress string, authToken string, connectionTimeoutSeconds int, operationTimeoutSeconds int) (Settings, error) {
 	address := strings.TrimSpace(serverAddress)
 	if address == "" {
@@ -48,22 +54,31 @@ func NewSettings(serverAddress string, authToken string, connectionTimeoutSecond
 	}, nil
 }
 
+// ServerAddress returns the normalized gRPC endpoint for this client.
 func (s Settings) ServerAddress() string {
 	return s.serverAddress
 }
 
+// AuthToken returns the Bearer token that will be attached to outgoing RPCs.
 func (s Settings) AuthToken() string {
 	return s.authToken
 }
 
+// ConnectionTimeout exposes the maximum time allowed to establish the gRPC
+// connection.
 func (s Settings) ConnectionTimeout() time.Duration {
 	return s.connectionTimeout
 }
 
+// OperationTimeout exposes the per-RPC timeout used when a context is not
+// provided by the caller.
 func (s Settings) OperationTimeout() time.Duration {
 	return s.operationTimeout
 }
 
+// NotificationClient is a thin wrapper around the generated gRPC client that
+// automatically wires authentication metadata, call sizing, and optional
+// polling helpers.
 type NotificationClient struct {
 	conn       *grpc.ClientConn
 	grpcClient grpcapi.NotificationServiceClient
@@ -72,6 +87,8 @@ type NotificationClient struct {
 	settings   Settings
 }
 
+// NewNotificationClient dials the configured server and returns a ready-to-use
+// NotificationClient.
 func NewNotificationClient(logger *slog.Logger, settings Settings) (*NotificationClient, error) {
 	dialCtx, cancel := context.WithTimeout(context.Background(), settings.ConnectionTimeout())
 	defer cancel()
@@ -107,10 +124,12 @@ func NewNotificationClient(logger *slog.Logger, settings Settings) (*Notificatio
 	}, nil
 }
 
+// Close releases the underlying gRPC connection.
 func (clientInstance *NotificationClient) Close() error {
 	return clientInstance.conn.Close()
 }
 
+// SendNotification invokes the SendNotification RPC with the provided context.
 func (clientInstance *NotificationClient) SendNotification(ctx context.Context, req *grpcapi.NotificationRequest) (*grpcapi.NotificationResponse, error) {
 	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+clientInstance.authToken)
 	resp, err := clientInstance.grpcClient.SendNotification(ctx, req)
@@ -120,6 +139,8 @@ func (clientInstance *NotificationClient) SendNotification(ctx context.Context, 
 	return resp, nil
 }
 
+// GetNotificationStatus fetches the latest server status for the supplied
+// notification identifier, applying the client's default timeout.
 func (clientInstance *NotificationClient) GetNotificationStatus(notificationID string) (*grpcapi.NotificationResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), clientInstance.settings.OperationTimeout())
 	defer cancel()
@@ -134,6 +155,9 @@ func (clientInstance *NotificationClient) GetNotificationStatus(notificationID s
 	return resp, nil
 }
 
+// SendNotificationAndWait issues a SendNotification RPC and polls for its
+// terminal status until it is either sent, fails, or the client's timeout
+// elapses.
 func (clientInstance *NotificationClient) SendNotificationAndWait(req *grpcapi.NotificationRequest) (*grpcapi.NotificationResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), clientInstance.settings.OperationTimeout())
 	defer cancel()
