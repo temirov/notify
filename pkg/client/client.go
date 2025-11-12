@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/temirov/pinguin/pkg/grpcapi"
+	"github.com/temirov/pinguin/pkg/grpcutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
@@ -82,6 +83,10 @@ func NewNotificationClient(logger *slog.Logger, settings Settings) (*Notificatio
 			return dialer.DialContext(ctx, "tcp", addr)
 		}),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(grpcutil.MaxMessageSizeBytes),
+			grpc.MaxCallSendMsgSize(grpcutil.MaxMessageSizeBytes),
+		),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial gRPC server: %w", err)

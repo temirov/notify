@@ -31,7 +31,7 @@ Pinguin is a production‑quality notification service written in Go. It exposes
   - **Email:** Delivered via SMTP using the credentials you configure for your preferred mail provider.
   - **SMS:** Delivered using Twilio’s REST API.
 - **Email Attachments:**  
-  Attach up to **10 files** (5 MiB each, 25 MiB aggregate) to email notifications. Attachments are persisted so scheduled or retried jobs keep their payloads.
+  Attach up to **10 files** (5 MiB each, 25 MiB aggregate) to email notifications. Attachments are persisted so scheduled or retried jobs keep their payloads, and both the server and CLI bump the gRPC message size limit to 32 MiB so the larger payloads are accepted end-to-end.
 
 - **Scheduled Delivery:**  
   Clients can provide an optional `scheduled_time` to defer dispatch until a specific timestamp. The background worker releases the notification when the scheduled time arrives.

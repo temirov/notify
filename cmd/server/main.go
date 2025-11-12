@@ -15,6 +15,7 @@ import (
 	"github.com/temirov/pinguin/internal/model"
 	"github.com/temirov/pinguin/internal/service"
 	"github.com/temirov/pinguin/pkg/grpcapi"
+	"github.com/temirov/pinguin/pkg/grpcutil"
 	"github.com/temirov/pinguin/pkg/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -247,7 +248,11 @@ func main() {
 		}
 	}
 
-	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(authInterceptor(mainLogger, configuration.GRPCAuthToken)))
+	grpcServer := grpc.NewServer(
+		grpc.MaxRecvMsgSize(grpcutil.MaxMessageSizeBytes),
+		grpc.MaxSendMsgSize(grpcutil.MaxMessageSizeBytes),
+		grpc.UnaryInterceptor(authInterceptor(mainLogger, configuration.GRPCAuthToken)),
+	)
 	grpcapi.RegisterNotificationServiceServer(grpcServer, &notificationServiceServer{
 		notificationService: notificationSvc,
 		logger:              mainLogger,
