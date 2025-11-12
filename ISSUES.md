@@ -15,6 +15,8 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 
 ## Improvements
 
+- [x] [PN-21] Add a black-box integration test that schedules an email and confirms it is dispatched only after the scheduled time elapses.
+  - Resolved: Added an injectable notification service constructor plus an integration test that schedules an email, runs the background worker, and asserts the dispatch occurs after the scheduled timestamp and is recorded as sent.
 - [x] [PN-07] Remove all and any mentioning of Sendgrid . Replace it with our own implementation of sending emails to the desination emails. Build a detailed plan of sending emails using SMTP protocol.
   - Resolved: Captured provider-agnostic SMTP delivery documentation, linked it from README, and added a wiring regression test for the in-process SMTP sender.
 - [x] [PN-09] Disable SMS notifications and log the fact that the text notifications are disabled when TWILIO credentials are absent in the environemnt on the start
@@ -25,14 +27,8 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
   - Resolved: Deleted the CLI secret generator and related package, and updated README guidance to use `openssl rand -base64 32` for token creation.
 - [x] [PN-18] Provide a Docker Compose example that persists the SQLite database on an external volume and documents how to run it end-to-end.
   - Resolved: Added `docker-compose.yaml` with a named Docker volume, shipped `.env.pinguin.example`, configured the container to run as root so the volume is writable without manual ownership changes, documented compose usage in README, and verified go test/go vet run cleanly.
-- [ ] [PN-20] Extract the scheduling/retry logic into a reusable package.
-  - Status: Unresolved — scheduling currently lives under `internal/service`, making it impossible for other binaries to reuse the persistence-backed worker.
-  - Plan:
-    1. Move the scheduling types (ticker loop, exponential backoff, scheduled-time guards) into `pkg/scheduler`, exposing a narrow interface that accepts a storage abstraction plus dispatch callback.
-    2. Lift the persistence helpers (queries for queued/failed notifications, retry bookkeeping) behind an interface so the new package can be unit-tested with in-memory fakes; keep the GORM implementation under `internal/model`.
-    3. Add comprehensive tests in `pkg/scheduler` covering immediate send, future schedule, retry throttling, and SMS-disabled paths without touching the database.
-    4. Refactor `internal/service/notification_service` to embed the shared scheduler instead of duplicating the logic, ensuring existing behavior is preserved.
-    5. Document the reusable package in README/docs so other programs can adopt it as a drop-in persistent scheduler.
+- [x] [PN-20] Extract the scheduling/retry logic into a reusable package.
+  - Resolved: Added `pkg/scheduler` with repository/dispatcher interfaces plus unit tests, implemented a notification-specific store/dispatcher that bridge to GORM + senders, rewired `NotificationService` to run the shared worker, refreshed retry integration tests, and documented the reusable package in README/CHANGELOG.
 
 ## BugFixes
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/temirov/pinguin/internal/config"
 	"github.com/temirov/pinguin/internal/model"
+	"github.com/temirov/pinguin/pkg/scheduler"
 	"gorm.io/gorm"
 	"log/slog"
 )
@@ -42,29 +43,48 @@ type notificationServiceImpl struct {
 	smsEnabled       bool
 }
 
-// NewNotificationService creates a new NotificationService instance using the provided
-// database, logger, and service-level configuration. It instantiates its own protocol-specific senders.
+// NewNotificationService creates a NotificationService backed by SMTP/Twilio senders.
 func NewNotificationService(db *gorm.DB, logger *slog.Logger, cfg config.Config) NotificationService {
-	emailSenderInstance := NewSMTPEmailSender(SMTPConfig{
-		Host:        cfg.SMTPHost,
-		Port:        fmt.Sprintf("%d", cfg.SMTPPort),
-		Username:    cfg.SMTPUsername,
-		Password:    cfg.SMTPPassword,
-		FromAddress: cfg.FromEmail,
-		Timeouts:    cfg, // Pass the full config for timeouts
-	}, logger)
-	smsEnabled := cfg.TwilioConfigured()
-	var smsSenderInstance SmsSender
-	if smsEnabled {
-		smsSenderInstance = NewTwilioSmsSender(cfg.TwilioAccountSID, cfg.TwilioAuthToken, cfg.TwilioFromNumber, logger, cfg)
-	} else {
+	return NewNotificationServiceWithSenders(db, logger, cfg, nil, nil)
+}
+
+// NewNotificationServiceWithSenders allows callers (primarily tests) to provide custom senders.
+func NewNotificationServiceWithSenders(
+	db *gorm.DB,
+	logger *slog.Logger,
+	cfg config.Config,
+	emailSender EmailSender,
+	smsSender SmsSender,
+) NotificationService {
+	if emailSender == nil {
+		emailSender = NewSMTPEmailSender(SMTPConfig{
+			Host:        cfg.SMTPHost,
+			Port:        fmt.Sprintf("%d", cfg.SMTPPort),
+			Username:    cfg.SMTPUsername,
+			Password:    cfg.SMTPPassword,
+			FromAddress: cfg.FromEmail,
+			Timeouts:    cfg,
+		}, logger)
+	}
+
+	var resolvedSmsSender SmsSender
+	var smsEnabled bool
+	switch {
+	case smsSender != nil:
+		resolvedSmsSender = smsSender
+		smsEnabled = true
+	case cfg.TwilioConfigured():
+		resolvedSmsSender = NewTwilioSmsSender(cfg.TwilioAccountSID, cfg.TwilioAuthToken, cfg.TwilioFromNumber, logger, cfg)
+		smsEnabled = true
+	default:
 		logger.Warn("SMS notifications disabled: missing Twilio credentials")
 	}
+
 	return &notificationServiceImpl{
 		database:         db,
 		logger:           logger,
-		emailSender:      emailSenderInstance,
-		smsSender:        smsSenderInstance,
+		emailSender:      emailSender,
+		smsSender:        resolvedSmsSender,
 		maxRetries:       cfg.MaxRetries,
 		retryIntervalSec: cfg.RetryIntervalSec,
 		smsEnabled:       smsEnabled,
@@ -163,81 +183,20 @@ func (serviceInstance *notificationServiceImpl) GetNotificationStatus(ctx contex
 }
 
 func (serviceInstance *notificationServiceImpl) StartRetryWorker(ctx context.Context) {
-	retryTicker := time.NewTicker(time.Duration(serviceInstance.retryIntervalSec) * time.Second)
-	defer retryTicker.Stop()
-
-	serviceInstance.logger.Info("Starting retry worker", "base_interval_sec", serviceInstance.retryIntervalSec, "max_retries", serviceInstance.maxRetries)
-	for {
-		select {
-		case <-ctx.Done():
-			serviceInstance.logger.Info("Retry worker shutting down")
-			return
-		case <-retryTicker.C:
-			serviceInstance.processRetries(ctx)
-		}
-	}
-}
-
-func (serviceInstance *notificationServiceImpl) processRetries(ctx context.Context) {
-	currentTime := time.Now().UTC()
-	notificationRecords, fetchError := model.GetQueuedOrFailedNotifications(ctx, serviceInstance.database, serviceInstance.maxRetries, currentTime)
-	if fetchError != nil {
-		serviceInstance.logger.Error("Failed to fetch notifications for retry", "error", fetchError)
+	worker, workerErr := scheduler.NewWorker(scheduler.Config{
+		Repository:    newNotificationRetryStore(serviceInstance.database),
+		Dispatcher:    newNotificationDispatcher(serviceInstance),
+		Logger:        serviceInstance.logger,
+		Interval:      time.Duration(serviceInstance.retryIntervalSec) * time.Second,
+		MaxRetries:    serviceInstance.maxRetries,
+		SuccessStatus: model.StatusSent,
+		FailureStatus: model.StatusFailed,
+	})
+	if workerErr != nil {
+		serviceInstance.logger.Error("Failed to initialize retry worker", "error", workerErr)
 		return
 	}
-	for _, notificationRecord := range notificationRecords {
-		if notificationRecord.ScheduledFor != nil && currentTime.Before(notificationRecord.ScheduledFor.UTC()) {
-			continue
-		}
-		if notificationRecord.NotificationType == model.NotificationSMS && !serviceInstance.smsEnabled {
-			serviceInstance.logger.Warn("Skipping SMS retry because delivery is disabled", "notification_id", notificationRecord.NotificationID)
-			notificationRecord.Status = model.StatusFailed
-			notificationRecord.ProviderMessageID = ""
-			notificationRecord.RetryCount++
-			notificationRecord.LastAttemptedAt = currentTime
-			if saveError := model.SaveNotification(ctx, serviceInstance.database, &notificationRecord); saveError != nil {
-				serviceInstance.logger.Error("Failed to update notification after disabled SMS check", "notification_id", notificationRecord.NotificationID, "error", saveError)
-			}
-			continue
-		}
-		// Apply exponential backoff: baseInterval * 2^(retry_count)
-		if notificationRecord.RetryCount > 0 {
-			backoffDuration := time.Duration(serviceInstance.retryIntervalSec) * time.Second * (1 << uint(notificationRecord.RetryCount))
-			nextAttemptTime := notificationRecord.LastAttemptedAt.Add(backoffDuration)
-			if currentTime.Before(nextAttemptTime) {
-				continue
-			}
-		}
-		var dispatchError error
-		switch notificationRecord.NotificationType {
-		case model.NotificationEmail:
-			emailAttachments := model.ToEmailAttachments(notificationRecord.Attachments)
-			dispatchError = serviceInstance.emailSender.SendEmail(ctx, notificationRecord.Recipient, notificationRecord.Subject, notificationRecord.Message, emailAttachments)
-			if dispatchError == nil {
-				notificationRecord.Status = model.StatusSent
-				notificationRecord.ProviderMessageID = ""
-			}
-		case model.NotificationSMS:
-			var providerMessageID string
-			providerMessageID, dispatchError = serviceInstance.smsSender.SendSms(ctx, notificationRecord.Recipient, notificationRecord.Message)
-			if dispatchError == nil {
-				notificationRecord.Status = model.StatusSent
-				notificationRecord.ProviderMessageID = providerMessageID
-			}
-		default:
-			serviceInstance.logger.Error("Unsupported notification type during retry", "notification_id", notificationRecord.NotificationID)
-			continue
-		}
-		if dispatchError != nil {
-			serviceInstance.logger.Error("Dispatch failed during retry", "notification_id", notificationRecord.NotificationID, "error", dispatchError)
-			notificationRecord.Status = model.StatusFailed
-		}
-		notificationRecord.RetryCount++
-		notificationRecord.LastAttemptedAt = currentTime
-		if saveError := model.SaveNotification(ctx, serviceInstance.database, &notificationRecord); saveError != nil {
-			serviceInstance.logger.Error("Failed to update notification after retry", "notification_id", notificationRecord.NotificationID, "error", saveError)
-		}
-	}
+	worker.Run(ctx)
 }
 
 func normalizeAttachments(notificationType model.NotificationType, attachments []model.EmailAttachment) ([]model.EmailAttachment, error) {

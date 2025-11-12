@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/temirov/pinguin/internal/model"
+	"github.com/temirov/pinguin/pkg/scheduler"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"log/slog"
@@ -171,13 +172,12 @@ func TestSendNotificationRejectsUnsupportedTypes(t *testing.T) {
 	}
 }
 
-func TestProcessRetriesRespectsSchedule(t *testing.T) {
+func TestRetryWorkerRespectsSchedule(t *testing.T) {
 	t.Helper()
 
 	database := openIsolatedDatabase(t)
 	emailSender := &stubEmailSender{}
 	smsSender := &stubSmsSender{}
-
 	serviceInstance := &notificationServiceImpl{
 		database:         database,
 		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
@@ -188,54 +188,53 @@ func TestProcessRetriesRespectsSchedule(t *testing.T) {
 		smsEnabled:       true,
 	}
 
-	notificationIdentifier := "notif-scheduled"
 	now := time.Now().UTC()
-	futureScheduled := now.Add(5 * time.Minute)
-
+	future := now.Add(5 * time.Minute)
 	scheduledNotification := model.Notification{
-		NotificationID:   notificationIdentifier,
+		NotificationID:   "notif-scheduled",
 		NotificationType: model.NotificationEmail,
 		Recipient:        "user@example.com",
 		Message:          "Body",
 		Status:           model.StatusQueued,
-		ScheduledFor:     &futureScheduled,
+		ScheduledFor:     &future,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
-
-	if createError := model.CreateNotification(context.Background(), database, &scheduledNotification); createError != nil {
-		t.Fatalf("create notification error: %v", createError)
+	if createErr := model.CreateNotification(context.Background(), database, &scheduledNotification); createErr != nil {
+		t.Fatalf("create notification error: %v", createErr)
 	}
 
-	serviceInstance.processRetries(context.Background())
+	clock := &adjustableClock{now: now}
+	worker := newRetryWorkerForTest(t, serviceInstance, clock)
+	worker.RunOnce(context.Background())
 	if emailSender.callCount != 0 {
-		t.Fatalf("expected zero dispatches before schedule")
+		t.Fatalf("expected no dispatch before schedule")
 	}
 
-	pastScheduled := now.Add(-1 * time.Minute)
-	scheduledNotification.ScheduledFor = &pastScheduled
+	past := now.Add(-1 * time.Minute)
+	scheduledNotification.ScheduledFor = &past
 	scheduledNotification.Status = model.StatusQueued
-	if saveError := model.SaveNotification(context.Background(), database, &scheduledNotification); saveError != nil {
-		t.Fatalf("save notification error: %v", saveError)
+	if saveErr := model.SaveNotification(context.Background(), database, &scheduledNotification); saveErr != nil {
+		t.Fatalf("save notification error: %v", saveErr)
 	}
 
-	serviceInstance.processRetries(context.Background())
+	clock.now = now.Add(30 * time.Minute)
+	worker.RunOnce(context.Background())
 	if emailSender.callCount != 1 {
-		t.Fatalf("expected one dispatch after schedule")
+		t.Fatalf("expected dispatch after schedule")
 	}
 
-	fetchedNotification, fetchError := model.GetNotificationByID(context.Background(), database, notificationIdentifier)
-	if fetchError != nil {
-		t.Fatalf("fetch notification error: %v", fetchError)
+	persisted, fetchErr := model.GetNotificationByID(context.Background(), database, "notif-scheduled")
+	if fetchErr != nil {
+		t.Fatalf("fetch notification error: %v", fetchErr)
 	}
-
-	if fetchedNotification.Status != model.StatusSent {
-		t.Fatalf("unexpected status %s", fetchedNotification.Status)
+	if persisted.Status != model.StatusSent {
+		t.Fatalf("expected status sent, got %s", persisted.Status)
 	}
-	if fetchedNotification.RetryCount != 1 {
-		t.Fatalf("unexpected retry count %d", fetchedNotification.RetryCount)
+	if persisted.RetryCount != 1 {
+		t.Fatalf("expected retry count 1, got %d", persisted.RetryCount)
 	}
-	if fetchedNotification.LastAttemptedAt.IsZero() {
+	if persisted.LastAttemptedAt.IsZero() {
 		t.Fatalf("expected last attempted timestamp")
 	}
 }
@@ -438,7 +437,7 @@ func TestSendNotificationPersistsAttachments(t *testing.T) {
 	}
 }
 
-func TestProcessRetriesFailsSmsWhenSenderDisabled(t *testing.T) {
+func TestRetryWorkerMarksSmsDisabledAsFailed(t *testing.T) {
 	t.Helper()
 
 	database := openIsolatedDatabase(t)
@@ -462,30 +461,27 @@ func TestProcessRetriesFailsSmsWhenSenderDisabled(t *testing.T) {
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
-
-	if createError := model.CreateNotification(context.Background(), database, &smsNotification); createError != nil {
-		t.Fatalf("create notification error: %v", createError)
+	if createErr := model.CreateNotification(context.Background(), database, &smsNotification); createErr != nil {
+		t.Fatalf("create notification error: %v", createErr)
 	}
 
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			t.Fatalf("unexpected panic during retry processing: %v", recovered)
-		}
-	}()
+	clock := &adjustableClock{now: now}
+	worker := newRetryWorkerForTest(t, serviceInstance, clock)
+	worker.RunOnce(context.Background())
 
-	serviceInstance.processRetries(context.Background())
-
-	updatedNotification, fetchError := model.GetNotificationByID(context.Background(), database, "notif-sms-disabled")
-	if fetchError != nil {
-		t.Fatalf("fetch notification error: %v", fetchError)
+	updated, fetchErr := model.GetNotificationByID(context.Background(), database, "notif-sms-disabled")
+	if fetchErr != nil {
+		t.Fatalf("fetch notification error: %v", fetchErr)
 	}
-
-	if updatedNotification.Status != model.StatusFailed {
-		t.Fatalf("expected status failed, got %s", updatedNotification.Status)
+	if updated.Status != model.StatusFailed {
+		t.Fatalf("expected status failed, got %s", updated.Status)
+	}
+	if updated.RetryCount != 1 {
+		t.Fatalf("expected retry count increment, got %d", updated.RetryCount)
 	}
 }
 
-func TestProcessRetriesDispatchesStoredAttachments(t *testing.T) {
+func TestRetryWorkerDispatchesStoredAttachments(t *testing.T) {
 	t.Helper()
 
 	database := openIsolatedDatabase(t)
@@ -500,18 +496,18 @@ func TestProcessRetriesDispatchesStoredAttachments(t *testing.T) {
 		smsEnabled:       true,
 	}
 
-	scheduledTime := time.Now().UTC().Add(5 * time.Minute)
+	future := time.Now().UTC().Add(5 * time.Minute)
 	response, err := serviceInstance.SendNotification(context.Background(), model.NotificationRequest{
 		NotificationType: model.NotificationEmail,
 		Recipient:        "user@example.com",
 		Subject:          "Subject",
 		Message:          "Body",
-		ScheduledFor:     &scheduledTime,
+		ScheduledFor:     &future,
 		Attachments: []model.EmailAttachment{
 			{
 				Filename:    "data.txt",
 				ContentType: "text/plain",
-				Data:        []byte("attachment-data"),
+				Data:        []byte("content"),
 			},
 		},
 	})
@@ -523,7 +519,6 @@ func TestProcessRetriesDispatchesStoredAttachments(t *testing.T) {
 	if fetchErr != nil {
 		t.Fatalf("fetch error: %v", fetchErr)
 	}
-
 	past := time.Now().UTC().Add(-1 * time.Minute)
 	stored.ScheduledFor = &past
 	stored.Status = model.StatusQueued
@@ -531,13 +526,42 @@ func TestProcessRetriesDispatchesStoredAttachments(t *testing.T) {
 		t.Fatalf("save error: %v", saveErr)
 	}
 
-	serviceInstance.processRetries(context.Background())
+	clock := &adjustableClock{now: time.Now().UTC()}
+	worker := newRetryWorkerForTest(t, serviceInstance, clock)
+	worker.RunOnce(context.Background())
 	if emailSender.callCount != 1 {
 		t.Fatalf("expected retry to dispatch email")
 	}
 	if len(emailSender.receivedAttachments) != 1 || len(emailSender.receivedAttachments[0]) != 1 {
-		t.Fatalf("expected retry to forward attachment")
+		t.Fatalf("expected attachments to flow through retry")
 	}
+}
+
+type adjustableClock struct {
+	now time.Time
+}
+
+func (clock *adjustableClock) Now() time.Time {
+	return clock.now
+}
+
+func newRetryWorkerForTest(t *testing.T, serviceInstance *notificationServiceImpl, clock scheduler.Clock) *scheduler.Worker {
+	t.Helper()
+
+	worker, err := scheduler.NewWorker(scheduler.Config{
+		Repository:    newNotificationRetryStore(serviceInstance.database),
+		Dispatcher:    newNotificationDispatcher(serviceInstance),
+		Logger:        serviceInstance.logger,
+		Interval:      time.Duration(serviceInstance.retryIntervalSec) * time.Second,
+		MaxRetries:    serviceInstance.maxRetries,
+		SuccessStatus: model.StatusSent,
+		FailureStatus: model.StatusFailed,
+		Clock:         clock,
+	})
+	if err != nil {
+		t.Fatalf("worker init error: %v", err)
+	}
+	return worker
 }
 
 type stubEmailSender struct {
