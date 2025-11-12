@@ -43,29 +43,48 @@ type notificationServiceImpl struct {
 	smsEnabled       bool
 }
 
-// NewNotificationService creates a new NotificationService instance using the provided
-// database, logger, and service-level configuration. It instantiates its own protocol-specific senders.
+// NewNotificationService creates a NotificationService backed by SMTP/Twilio senders.
 func NewNotificationService(db *gorm.DB, logger *slog.Logger, cfg config.Config) NotificationService {
-	emailSenderInstance := NewSMTPEmailSender(SMTPConfig{
-		Host:        cfg.SMTPHost,
-		Port:        fmt.Sprintf("%d", cfg.SMTPPort),
-		Username:    cfg.SMTPUsername,
-		Password:    cfg.SMTPPassword,
-		FromAddress: cfg.FromEmail,
-		Timeouts:    cfg, // Pass the full config for timeouts
-	}, logger)
-	smsEnabled := cfg.TwilioConfigured()
-	var smsSenderInstance SmsSender
-	if smsEnabled {
-		smsSenderInstance = NewTwilioSmsSender(cfg.TwilioAccountSID, cfg.TwilioAuthToken, cfg.TwilioFromNumber, logger, cfg)
-	} else {
+	return NewNotificationServiceWithSenders(db, logger, cfg, nil, nil)
+}
+
+// NewNotificationServiceWithSenders allows callers (primarily tests) to provide custom senders.
+func NewNotificationServiceWithSenders(
+	db *gorm.DB,
+	logger *slog.Logger,
+	cfg config.Config,
+	emailSender EmailSender,
+	smsSender SmsSender,
+) NotificationService {
+	if emailSender == nil {
+		emailSender = NewSMTPEmailSender(SMTPConfig{
+			Host:        cfg.SMTPHost,
+			Port:        fmt.Sprintf("%d", cfg.SMTPPort),
+			Username:    cfg.SMTPUsername,
+			Password:    cfg.SMTPPassword,
+			FromAddress: cfg.FromEmail,
+			Timeouts:    cfg,
+		}, logger)
+	}
+
+	var resolvedSmsSender SmsSender
+	var smsEnabled bool
+	switch {
+	case smsSender != nil:
+		resolvedSmsSender = smsSender
+		smsEnabled = true
+	case cfg.TwilioConfigured():
+		resolvedSmsSender = NewTwilioSmsSender(cfg.TwilioAccountSID, cfg.TwilioAuthToken, cfg.TwilioFromNumber, logger, cfg)
+		smsEnabled = true
+	default:
 		logger.Warn("SMS notifications disabled: missing Twilio credentials")
 	}
+
 	return &notificationServiceImpl{
 		database:         db,
 		logger:           logger,
-		emailSender:      emailSenderInstance,
-		smsSender:        smsSenderInstance,
+		emailSender:      emailSender,
+		smsSender:        resolvedSmsSender,
 		maxRetries:       cfg.MaxRetries,
 		retryIntervalSec: cfg.RetryIntervalSec,
 		smsEnabled:       smsEnabled,

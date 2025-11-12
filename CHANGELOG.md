@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added a scheduling integration test backed by injectable senders to ensure emails queued with future timestamps are dispatched only after the background worker releases them.
 - Extracted the scheduling/retry worker into `pkg/scheduler`, wired the server through a repository/dispatcher bridge, and added unit tests so other binaries can reuse the persistence-agnostic scheduler.
 - Removed the `generate-secret` CLI command and `pkg/secret` helper in favor of documenting `openssl rand -base64 32` for token generation.
 - Split the CLI and client-test utilities into standalone Go modules so `go run ./...` targets only the server binary.
