@@ -18,7 +18,7 @@ Pinguin delivers email notifications through `SMTPEmailSender`, a provider-agnos
 ## Delivery Sequence
 
 1. **Input validation** happens in `NotificationService` before dispatch. Requests missing a recipient or message are rejected immediately.
-2. **Message composition** uses `buildEmailMessage` to generate a MIME-compliant plain-text payload containing the headers (`From`, `To`, `Subject`) and body.
+2. **Message composition** uses `buildEmailMessage` to generate a MIME-compliant payload containing the headers (`From`, `To`, `Subject`) and body. When attachments are present, the helper emits a `multipart/mixed` body, base64-encodes each attachment, and adds `Content-Disposition` metadata so SMTP relays understand filenames and MIME types.
 3. **Connection setup** selects the transport based on the configured port:
    - Port `465` triggers an implicit TLS connection with `tls.DialWithDialer`. The dialer respects `CONNECTION_TIMEOUT_SEC`, and the connection is established before issuing SMTP commands.
    - Any other port uses the standard `smtp.SendMail` helper, which negotiates STARTTLS when the server advertises support.
@@ -33,9 +33,15 @@ Pinguin delivers email notifications through `SMTPEmailSender`, a provider-agnos
 - `OPERATION_TIMEOUT_SEC` is reserved for future I/O deadlines; until then we rely on context cancellation supplied by the caller.
 - The background worker respects the same configuration when retrying emails.
 
+## Attachment Limits
+
+- Each email may include up to **10 attachments**.
+- Individual attachments are capped at **5 MiB**, and the combined payload must remain under **25 MiB**.
+- Attachments are validated at the service edge and persisted in a dedicated table so retries use the original bytes.
+
 ## Testing Strategy
 
-- **Unit tests** validate that `NotificationService` wires the SMTP sender with the exact configuration values (added in `notification_service_email_sender_test.go`).
+- **Unit tests** validate that `NotificationService` wires the SMTP sender with the exact configuration values (added in `notification_service_email_sender_test.go`) and that `buildEmailMessage` produces correct MIME boundaries for attachments.
 - **Integration tests** (future work) should use a fake SMTP server to assert protocol exchanges without reaching the public internet.
 
 ## Future Enhancements

@@ -19,6 +19,13 @@ enum Status {
   UNKNOWN = 3;
 }
 
+// Attachment metadata for email notifications.
+message EmailAttachment {
+  string filename = 1;
+  string content_type = 2;
+  bytes data = 3;
+}
+
 // Request to send a notification.
 message NotificationRequest {
   NotificationType notification_type = 1;
@@ -26,6 +33,7 @@ message NotificationRequest {
   string subject = 3; // Optional for SMS.
   string message = 4;
   google.protobuf.Timestamp scheduled_time = 5;
+  repeated EmailAttachment attachments = 6;
 }
 
 // Response returned after sending (or when retrieving) a notification.
@@ -41,6 +49,7 @@ message NotificationResponse {
   string created_at = 9;
   string updated_at = 10;
   google.protobuf.Timestamp scheduled_time = 11;
+  repeated EmailAttachment attachments = 12;
 }
 
 // Request for retrieving the status.

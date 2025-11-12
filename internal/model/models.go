@@ -16,6 +16,13 @@ const (
 	NotificationSMS   NotificationType = "sms"
 )
 
+// EmailAttachment carries attachment metadata used across domain layers.
+type EmailAttachment struct {
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	Data        []byte `json:"data"`
+}
+
 // Status constants used for the Notification model.
 const (
 	StatusQueued  = "queued"
@@ -27,44 +34,58 @@ const (
 // Notification is our main model in the DB, with GORM & JSON tags.
 // You can return this directly via JSON or create a separate struct if you like.
 type Notification struct {
-	ID                uint             `json:"-" gorm:"primaryKey"`
-	NotificationID    string           `json:"notification_id" gorm:"uniqueIndex"`
-	NotificationType  NotificationType `json:"notification_type"`
-	Recipient         string           `json:"recipient"`
-	Subject           string           `json:"subject,omitempty"`
-	Message           string           `json:"message"`
-	ProviderMessageID string           `json:"provider_message_id"`
-	Status            string           `json:"status"`
-	RetryCount        int              `json:"retry_count"`
-	LastAttemptedAt   time.Time        `json:"last_attempted_at"`
-	ScheduledFor      *time.Time       `json:"scheduled_for"`
-	CreatedAt         time.Time        `json:"created_at"`
-	UpdatedAt         time.Time        `json:"updated_at"`
+	ID                uint                     `json:"-" gorm:"primaryKey"`
+	NotificationID    string                   `json:"notification_id" gorm:"uniqueIndex"`
+	NotificationType  NotificationType         `json:"notification_type"`
+	Recipient         string                   `json:"recipient"`
+	Subject           string                   `json:"subject,omitempty"`
+	Message           string                   `json:"message"`
+	ProviderMessageID string                   `json:"provider_message_id"`
+	Status            string                   `json:"status"`
+	RetryCount        int                      `json:"retry_count"`
+	LastAttemptedAt   time.Time                `json:"last_attempted_at"`
+	ScheduledFor      *time.Time               `json:"scheduled_for"`
+	CreatedAt         time.Time                `json:"created_at"`
+	UpdatedAt         time.Time                `json:"updated_at"`
+	Attachments       []NotificationAttachment `json:"attachments,omitempty" gorm:"foreignKey:NotificationID;references:NotificationID;constraint:OnDelete:CASCADE"`
+}
+
+// NotificationAttachment persists attachment payloads per notification.
+type NotificationAttachment struct {
+	ID             uint      `json:"-" gorm:"primaryKey"`
+	NotificationID string    `json:"notification_id" gorm:"index"`
+	Filename       string    `json:"filename"`
+	ContentType    string    `json:"content_type"`
+	Data           []byte    `json:"data" gorm:"type:blob"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // NotificationRequest represents the incoming request payload (REST/gRPC).
 type NotificationRequest struct {
-	NotificationType NotificationType `json:"notification_type"`
-	Recipient        string           `json:"recipient"`
-	Subject          string           `json:"subject,omitempty"`
-	Message          string           `json:"message"`
-	ScheduledFor     *time.Time       `json:"scheduled_for,omitempty"`
+	NotificationType NotificationType  `json:"notification_type"`
+	Recipient        string            `json:"recipient"`
+	Subject          string            `json:"subject,omitempty"`
+	Message          string            `json:"message"`
+	ScheduledFor     *time.Time        `json:"scheduled_for,omitempty"`
+	Attachments      []EmailAttachment `json:"attachments,omitempty"`
 }
 
 // NotificationResponse is what you'll return to the client.
 // You could also return the Notification itself, but some prefer a separate shape.
 type NotificationResponse struct {
-	NotificationID    string           `json:"notification_id"`
-	NotificationType  NotificationType `json:"notification_type"`
-	Recipient         string           `json:"recipient"`
-	Subject           string           `json:"subject,omitempty"`
-	Message           string           `json:"message"`
-	Status            string           `json:"status"`
-	ProviderMessageID string           `json:"provider_message_id"`
-	RetryCount        int              `json:"retry_count"`
-	ScheduledFor      *time.Time       `json:"scheduled_for,omitempty"`
-	CreatedAt         time.Time        `json:"created_at"`
-	UpdatedAt         time.Time        `json:"updated_at"`
+	NotificationID    string            `json:"notification_id"`
+	NotificationType  NotificationType  `json:"notification_type"`
+	Recipient         string            `json:"recipient"`
+	Subject           string            `json:"subject,omitempty"`
+	Message           string            `json:"message"`
+	Status            string            `json:"status"`
+	ProviderMessageID string            `json:"provider_message_id"`
+	RetryCount        int               `json:"retry_count"`
+	ScheduledFor      *time.Time        `json:"scheduled_for,omitempty"`
+	CreatedAt         time.Time         `json:"created_at"`
+	UpdatedAt         time.Time         `json:"updated_at"`
+	Attachments       []EmailAttachment `json:"attachments,omitempty"`
 }
 
 // NewNotification constructs a ready-to-insert DB Notification from a request, defaulting status=queued.
@@ -85,6 +106,7 @@ func NewNotification(notificationID string, req NotificationRequest) Notificatio
 		ScheduledFor:     scheduledFor,
 		CreatedAt:        now,
 		UpdatedAt:        now,
+		Attachments:      convertEmailAttachments(notificationID, req.Attachments),
 	}
 }
 
@@ -107,6 +129,7 @@ func NewNotificationResponse(n Notification) NotificationResponse {
 		ScheduledFor:      scheduledFor,
 		CreatedAt:         n.CreatedAt,
 		UpdatedAt:         n.UpdatedAt,
+		Attachments:       ToEmailAttachments(n.Attachments),
 	}
 }
 
@@ -118,7 +141,10 @@ func CreateNotification(ctx context.Context, db *gorm.DB, n *Notification) error
 
 func GetNotificationByID(ctx context.Context, db *gorm.DB, notificationID string) (*Notification, error) {
 	var notif Notification
-	err := db.WithContext(ctx).Where("notification_id = ?", notificationID).First(&notif).Error
+	err := db.WithContext(ctx).
+		Preload("Attachments").
+		Where("notification_id = ?", notificationID).
+		First(&notif).Error
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +158,7 @@ func SaveNotification(ctx context.Context, db *gorm.DB, n *Notification) error {
 func GetQueuedOrFailedNotifications(ctx context.Context, db *gorm.DB, maxRetries int, currentTime time.Time) ([]Notification, error) {
 	var notifications []Notification
 	err := db.WithContext(ctx).
+		Preload("Attachments").
 		Where("(status = ? OR status = ?) AND retry_count < ? AND (scheduled_for IS NULL OR scheduled_for <= ?)",
 			StatusQueued, StatusFailed, maxRetries, currentTime).
 		Find(&notifications).Error
@@ -150,4 +177,40 @@ func MustGetNotificationByID(ctx context.Context, db *gorm.DB, notificationID st
 		return nil, err
 	}
 	return n, nil
+}
+
+func convertEmailAttachments(notificationID string, attachments []EmailAttachment) []NotificationAttachment {
+	if len(attachments) == 0 {
+		return nil
+	}
+	converted := make([]NotificationAttachment, 0, len(attachments))
+	for _, att := range attachments {
+		clonedData := make([]byte, len(att.Data))
+		copy(clonedData, att.Data)
+		converted = append(converted, NotificationAttachment{
+			NotificationID: notificationID,
+			Filename:       att.Filename,
+			ContentType:    att.ContentType,
+			Data:           clonedData,
+		})
+	}
+	return converted
+}
+
+// ToEmailAttachments translates stored attachments to the domain shape.
+func ToEmailAttachments(stored []NotificationAttachment) []EmailAttachment {
+	if len(stored) == 0 {
+		return nil
+	}
+	result := make([]EmailAttachment, 0, len(stored))
+	for _, att := range stored {
+		clonedData := make([]byte, len(att.Data))
+		copy(clonedData, att.Data)
+		result = append(result, EmailAttachment{
+			Filename:    att.Filename,
+			ContentType: att.ContentType,
+			Data:        clonedData,
+		})
+	}
+	return result
 }

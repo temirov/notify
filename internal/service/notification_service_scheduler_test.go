@@ -356,6 +356,88 @@ func TestSendNotificationRejectsSmsWhenSenderDisabled(t *testing.T) {
 	}
 }
 
+func TestSendNotificationRejectsAttachmentsForSms(t *testing.T) {
+	t.Helper()
+
+	database := openIsolatedDatabase(t)
+	serviceInstance := &notificationServiceImpl{
+		database:         database,
+		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
+		emailSender:      &stubEmailSender{},
+		smsSender:        &stubSmsSender{},
+		maxRetries:       3,
+		retryIntervalSec: 1,
+		smsEnabled:       true,
+	}
+
+	_, err := serviceInstance.SendNotification(context.Background(), model.NotificationRequest{
+		NotificationType: model.NotificationSMS,
+		Recipient:        "+15555550100",
+		Message:          "Body",
+		Attachments: []model.EmailAttachment{
+			{
+				Filename:    "secret.txt",
+				ContentType: "text/plain",
+				Data:        []byte("data"),
+			},
+		},
+	})
+	if err == nil {
+		t.Fatalf("expected attachment rejection for sms")
+	}
+}
+
+func TestSendNotificationPersistsAttachments(t *testing.T) {
+	t.Helper()
+
+	database := openIsolatedDatabase(t)
+	emailSender := &stubEmailSender{}
+	serviceInstance := &notificationServiceImpl{
+		database:         database,
+		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
+		emailSender:      emailSender,
+		smsSender:        &stubSmsSender{},
+		maxRetries:       3,
+		retryIntervalSec: 1,
+		smsEnabled:       true,
+	}
+
+	attachment := model.EmailAttachment{
+		Filename:    "hello.txt",
+		ContentType: "text/plain",
+		Data:        []byte("hi"),
+	}
+
+	response, err := serviceInstance.SendNotification(context.Background(), model.NotificationRequest{
+		NotificationType: model.NotificationEmail,
+		Recipient:        "user@example.com",
+		Subject:          "Subject",
+		Message:          "Body",
+		Attachments:      []model.EmailAttachment{attachment},
+	})
+	if err != nil {
+		t.Fatalf("send error: %v", err)
+	}
+
+	if emailSender.callCount != 1 {
+		t.Fatalf("expected immediate email dispatch")
+	}
+	if len(emailSender.receivedAttachments) != 1 || len(emailSender.receivedAttachments[0]) != 1 {
+		t.Fatalf("expected attachment to be forwarded to sender")
+	}
+
+	saved, fetchErr := model.GetNotificationByID(context.Background(), database, response.NotificationID)
+	if fetchErr != nil {
+		t.Fatalf("fetch error: %v", fetchErr)
+	}
+	if len(saved.Attachments) != 1 {
+		t.Fatalf("expected one stored attachment, got %d", len(saved.Attachments))
+	}
+	if saved.Attachments[0].Filename != attachment.Filename {
+		t.Fatalf("attachment filename mismatch")
+	}
+}
+
 func TestProcessRetriesFailsSmsWhenSenderDisabled(t *testing.T) {
 	t.Helper()
 
@@ -403,12 +485,71 @@ func TestProcessRetriesFailsSmsWhenSenderDisabled(t *testing.T) {
 	}
 }
 
-type stubEmailSender struct {
-	callCount int
+func TestProcessRetriesDispatchesStoredAttachments(t *testing.T) {
+	t.Helper()
+
+	database := openIsolatedDatabase(t)
+	emailSender := &stubEmailSender{}
+	serviceInstance := &notificationServiceImpl{
+		database:         database,
+		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
+		emailSender:      emailSender,
+		smsSender:        &stubSmsSender{},
+		maxRetries:       3,
+		retryIntervalSec: 1,
+		smsEnabled:       true,
+	}
+
+	scheduledTime := time.Now().UTC().Add(5 * time.Minute)
+	response, err := serviceInstance.SendNotification(context.Background(), model.NotificationRequest{
+		NotificationType: model.NotificationEmail,
+		Recipient:        "user@example.com",
+		Subject:          "Subject",
+		Message:          "Body",
+		ScheduledFor:     &scheduledTime,
+		Attachments: []model.EmailAttachment{
+			{
+				Filename:    "data.txt",
+				ContentType: "text/plain",
+				Data:        []byte("attachment-data"),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("send error: %v", err)
+	}
+
+	stored, fetchErr := model.GetNotificationByID(context.Background(), database, response.NotificationID)
+	if fetchErr != nil {
+		t.Fatalf("fetch error: %v", fetchErr)
+	}
+
+	past := time.Now().UTC().Add(-1 * time.Minute)
+	stored.ScheduledFor = &past
+	stored.Status = model.StatusQueued
+	if saveErr := model.SaveNotification(context.Background(), database, stored); saveErr != nil {
+		t.Fatalf("save error: %v", saveErr)
+	}
+
+	serviceInstance.processRetries(context.Background())
+	if emailSender.callCount != 1 {
+		t.Fatalf("expected retry to dispatch email")
+	}
+	if len(emailSender.receivedAttachments) != 1 || len(emailSender.receivedAttachments[0]) != 1 {
+		t.Fatalf("expected retry to forward attachment")
+	}
 }
 
-func (sender *stubEmailSender) SendEmail(_ context.Context, _ string, _ string, _ string) error {
+type stubEmailSender struct {
+	callCount           int
+	receivedAttachments [][]model.EmailAttachment
+}
+
+func (sender *stubEmailSender) SendEmail(_ context.Context, _ string, _ string, _ string, attachments []model.EmailAttachment) error {
 	sender.callCount++
+	cloned := make([]model.EmailAttachment, len(attachments))
+	copy(cloned, attachments)
+	sender.receivedAttachments = append(sender.receivedAttachments, cloned)
 	return nil
 }
 
@@ -429,7 +570,7 @@ func openIsolatedDatabase(t *testing.T) *gorm.DB {
 	if openError != nil {
 		t.Fatalf("sqlite open error: %v", openError)
 	}
-	if migrateError := database.AutoMigrate(&model.Notification{}); migrateError != nil {
+	if migrateError := database.AutoMigrate(&model.Notification{}, &model.NotificationAttachment{}); migrateError != nil {
 		t.Fatalf("migration error: %v", migrateError)
 	}
 	return database

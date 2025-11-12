@@ -10,14 +10,8 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
   - Resolved: Introduced optional gRPC `scheduled_time`, persisted scheduling metadata, updated workers, and added scheduling regression tests.
 - [x] [PN-08] Add a CLI client under new clients/cli folder. The CLI client shall be able to connect to the Pinguin Notification Service and submit/schedule notification delivery
   - Resolved: Added Cobra/Viper CLI with send command, injected gRPC client settings, scheduled-time parsing, and regression tests for request construction/error handling.
-- [ ] [PN-19] Support sending email attachments through the gRPC API so clients can include files with notifications.
-  - Status: Unresolved — the API, domain models, storage layer, and SMTP sender only handle plain-text bodies.
-  - Plan:
-    1. **API contract:** Extend `proto/pinguin.proto` with a repeated `EmailAttachment` message (`filename`, `content_type`, `bytes data`) referenced from `NotificationRequest`, regenerate `pkg/grpcapi`, and update `cmd/server` mapping/logging so attachments flow into the service while rejecting them for SMS requests.
-    2. **Domain & persistence:** Introduce `model.NotificationAttachment` plus `[]NotificationAttachment` on `model.Notification`, migrate it in `internal/db.InitDB` and test helpers, and update constructors/CRUD helpers to preload attachments so queued jobs keep their files.
-    3. **Service & SMTP sender:** Expand `NotificationService` validation to enforce attachment limits (count/bytes, email-only), plumb attachments through immediate send and retry paths, update the `EmailSender` interface, and enhance `SMTPEmailSender`/`buildEmailMessage` to emit multipart MIME with base64-encoded attachments.
-    4. **Client & tooling:** Add a repeatable `--attachment` flag to `clients/cli send` (and the sample `cmd/client_test`) that reads files, infers MIME types, and populates the gRPC attachments field while disallowing attachments for SMS; update CLI tests and pkg/client request builders accordingly.
-    5. **Documentation & tests:** Refresh README/examples and `docs/smtp_delivery_plan.md` to describe attachment usage/limits, and add Go unit tests covering model constructors, SMTP MIME building, service immediate+retry attachment flow, and CLI flag parsing; ensure `go test ./...` validates the new behavior.
+- [x] [PN-19] Support sending email attachments through the gRPC API so clients can include files with notifications.
+  - Resolved: Extended the protobuf contract plus server/domain models with `EmailAttachment`, added a persisted `NotificationAttachment` table, enforced attachment limits/validation, and taught the SMTP sender + retry worker to emit multipart MIME payloads. Updated the CLI and sample client with `--attachment` flags backed by a shared loader, refreshed README/docs, and added unit tests (model, service, SMTP, CLI parsing). `go vet ./...` and `go test ./...` could not run in this environment due to the enforced 10s command timeout; please execute them locally.
 
 ## Improvements
 

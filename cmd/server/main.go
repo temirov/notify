@@ -15,6 +15,7 @@ import (
 	"github.com/temirov/pinguin/internal/model"
 	"github.com/temirov/pinguin/internal/service"
 	"github.com/temirov/pinguin/pkg/grpcapi"
+	"github.com/temirov/pinguin/pkg/grpcutil"
 	"github.com/temirov/pinguin/pkg/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -55,12 +56,14 @@ func (server *notificationServiceServer) SendNotification(ctx context.Context, r
 
 	recipientDigest := digestForLogging(req.Recipient)
 	subjectDigest := digestForLogging(req.Subject)
+	attachments := mapGrpcAttachments(req.GetAttachments())
 	server.logger.Info(
 		"notification_request_received",
 		"notification_type", req.NotificationType.String(),
 		"subject_digest", subjectDigest,
 		"recipient_digest", recipientDigest,
 		"scheduled", scheduledFor != nil,
+		"attachment_count", len(attachments),
 	)
 
 	modelRequest := model.NotificationRequest{
@@ -69,6 +72,7 @@ func (server *notificationServiceServer) SendNotification(ctx context.Context, r
 		Subject:          req.Subject,
 		Message:          req.Message,
 		ScheduledFor:     scheduledFor,
+		Attachments:      attachments,
 	}
 
 	modelResponse, err := server.notificationService.SendNotification(ctx, modelRequest)
@@ -142,6 +146,7 @@ func mapModelToGrpcResponse(modelResp model.NotificationResponse) *grpcapi.Notif
 		CreatedAt:         modelResp.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:         modelResp.UpdatedAt.Format(time.RFC3339),
 		ScheduledTime:     scheduledTime,
+		Attachments:       mapModelAttachments(modelResp.Attachments),
 	}
 }
 
@@ -152,6 +157,43 @@ func digestForLogging(value string) string {
 	}
 	digest := sha256.Sum256([]byte(trimmed))
 	return hex.EncodeToString(digest[:8])
+}
+
+func mapGrpcAttachments(source []*grpcapi.EmailAttachment) []model.EmailAttachment {
+	if len(source) == 0 {
+		return nil
+	}
+	result := make([]model.EmailAttachment, 0, len(source))
+	for _, attachment := range source {
+		if attachment == nil {
+			continue
+		}
+		clonedData := make([]byte, len(attachment.Data))
+		copy(clonedData, attachment.Data)
+		result = append(result, model.EmailAttachment{
+			Filename:    attachment.GetFilename(),
+			ContentType: attachment.GetContentType(),
+			Data:        clonedData,
+		})
+	}
+	return result
+}
+
+func mapModelAttachments(source []model.EmailAttachment) []*grpcapi.EmailAttachment {
+	if len(source) == 0 {
+		return nil
+	}
+	result := make([]*grpcapi.EmailAttachment, 0, len(source))
+	for _, attachment := range source {
+		clonedData := make([]byte, len(attachment.Data))
+		copy(clonedData, attachment.Data)
+		result = append(result, &grpcapi.EmailAttachment{
+			Filename:    attachment.Filename,
+			ContentType: attachment.ContentType,
+			Data:        clonedData,
+		})
+	}
+	return result
 }
 
 func main() {
@@ -206,7 +248,11 @@ func main() {
 		}
 	}
 
-	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(authInterceptor(mainLogger, configuration.GRPCAuthToken)))
+	grpcServer := grpc.NewServer(
+		grpc.MaxRecvMsgSize(grpcutil.MaxMessageSizeBytes),
+		grpc.MaxSendMsgSize(grpcutil.MaxMessageSizeBytes),
+		grpc.UnaryInterceptor(authInterceptor(mainLogger, configuration.GRPCAuthToken)),
+	)
 	grpcapi.RegisterNotificationServiceServer(grpcServer, &notificationServiceServer{
 		notificationService: notificationSvc,
 		logger:              mainLogger,

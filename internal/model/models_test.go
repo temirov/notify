@@ -57,6 +57,39 @@ func TestNewNotificationConstructsQueuedRecord(t *testing.T) {
 	}
 }
 
+func TestNewNotificationCopiesAttachments(t *testing.T) {
+	t.Helper()
+
+	request := NotificationRequest{
+		NotificationType: NotificationEmail,
+		Recipient:        "user@example.com",
+		Message:          "Body",
+		Attachments: []EmailAttachment{
+			{
+				Filename:    "report.pdf",
+				ContentType: "application/pdf",
+				Data:        []byte{0x01, 0x02},
+			},
+		},
+	}
+
+	record := NewNotification("notif-attachments", request)
+	if len(record.Attachments) != 1 {
+		t.Fatalf("expected attachment to be copied")
+	}
+	if record.Attachments[0].Filename != "report.pdf" {
+		t.Fatalf("unexpected filename %s", record.Attachments[0].Filename)
+	}
+
+	response := NewNotificationResponse(record)
+	if len(response.Attachments) != 1 {
+		t.Fatalf("expected attachment in response")
+	}
+	if response.Attachments[0].ContentType != "application/pdf" {
+		t.Fatalf("unexpected content type %s", response.Attachments[0].ContentType)
+	}
+}
+
 func TestNewNotificationResponseCopiesScheduledTime(t *testing.T) {
 	t.Helper()
 
@@ -141,7 +174,7 @@ func openModelTestDatabase(t *testing.T) *gorm.DB {
 	if openError != nil {
 		t.Fatalf("open database error: %v", openError)
 	}
-	if migrateError := database.AutoMigrate(&Notification{}); migrateError != nil {
+	if migrateError := database.AutoMigrate(&Notification{}, &NotificationAttachment{}); migrateError != nil {
 		t.Fatalf("migration error: %v", migrateError)
 	}
 	return database

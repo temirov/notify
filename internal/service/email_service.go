@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"net/smtp"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/temirov/pinguin/internal/config"
+	"github.com/temirov/pinguin/internal/model"
 	"log/slog"
 )
 
@@ -23,7 +25,7 @@ type SMTPConfig struct {
 }
 
 type EmailSender interface {
-	SendEmail(ctx context.Context, recipient string, subject string, message string) error
+	SendEmail(ctx context.Context, recipient string, subject string, message string, attachments []model.EmailAttachment) error
 }
 
 type SMTPEmailSender struct {
@@ -38,8 +40,8 @@ func NewSMTPEmailSender(configuration SMTPConfig, logger *slog.Logger) *SMTPEmai
 	}
 }
 
-func (senderInstance *SMTPEmailSender) SendEmail(ctx context.Context, recipient string, subject string, message string) error {
-	emailMessage := buildEmailMessage(senderInstance.Config.FromAddress, recipient, subject, message)
+func (senderInstance *SMTPEmailSender) SendEmail(ctx context.Context, recipient string, subject string, message string, attachments []model.EmailAttachment) error {
+	emailMessage := buildEmailMessage(senderInstance.Config.FromAddress, recipient, subject, message, attachments)
 
 	if senderInstance.Config.Port == "465" {
 		serverAddr := net.JoinHostPort(senderInstance.Config.Host, senderInstance.Config.Port)
@@ -105,14 +107,86 @@ func (senderInstance *SMTPEmailSender) SendEmail(ctx context.Context, recipient 
 	return nil
 }
 
-func buildEmailMessage(fromAddress string, toAddress string, subject string, body string) string {
+func buildEmailMessage(fromAddress string, toAddress string, subject string, body string, attachments []model.EmailAttachment) string {
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("From: %s\r\n", fromAddress))
 	builder.WriteString(fmt.Sprintf("To: %s\r\n", toAddress))
 	builder.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
 	builder.WriteString("MIME-Version: 1.0\r\n")
-	builder.WriteString("Content-Type: text/plain; charset=\"utf-8\"\r\n")
+	if len(attachments) == 0 {
+		builder.WriteString("Content-Type: text/plain; charset=\"utf-8\"\r\n")
+		builder.WriteString("\r\n")
+		builder.WriteString(body)
+		return builder.String()
+	}
+
+	boundary := fmt.Sprintf("PinguinBoundary-%d", time.Now().UnixNano())
+	builder.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=\"%s\"\r\n", boundary))
 	builder.WriteString("\r\n")
+
+	builder.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	builder.WriteString("Content-Type: text/plain; charset=\"utf-8\"\r\n")
+	builder.WriteString("Content-Transfer-Encoding: 7bit\r\n\r\n")
 	builder.WriteString(body)
+	builder.WriteString("\r\n")
+
+	for _, attachment := range attachments {
+		builder.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+		contentType := attachment.ContentType
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+		builder.WriteString(fmt.Sprintf("Content-Type: %s\r\n", contentType))
+		builder.WriteString("Content-Transfer-Encoding: base64\r\n")
+		builder.WriteString(fmt.Sprintf("Content-Disposition: attachment; filename=\"%s\"\r\n", sanitizeFilename(attachment.Filename)))
+		builder.WriteString("\r\n")
+		builder.WriteString(encodeBase64Chunked(attachment.Data))
+		builder.WriteString("\r\n")
+	}
+
+	builder.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
 	return builder.String()
+}
+
+func encodeBase64Chunked(data []byte) string {
+	if len(data) == 0 {
+		return ""
+	}
+	encoded := base64.StdEncoding.EncodeToString(data)
+	const lineLength = 76
+	var builder strings.Builder
+	for start := 0; start < len(encoded); start += lineLength {
+		end := start + lineLength
+		if end > len(encoded) {
+			end = len(encoded)
+		}
+		builder.WriteString(encoded[start:end])
+		builder.WriteString("\r\n")
+	}
+	return builder.String()
+}
+
+func sanitizeFilename(filename string) string {
+	trimmed := strings.TrimSpace(filename)
+	if trimmed == "" {
+		return "attachment"
+	}
+
+	var builder strings.Builder
+	for _, character := range trimmed {
+		if character < 32 || character == 127 {
+			continue
+		}
+		switch character {
+		case '"', '\\':
+			continue
+		default:
+			builder.WriteRune(character)
+		}
+	}
+	sanitized := strings.TrimSpace(builder.String())
+	if sanitized == "" {
+		return "attachment"
+	}
+	return sanitized
 }

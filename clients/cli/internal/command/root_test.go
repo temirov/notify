@@ -3,6 +3,8 @@ package command
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -208,5 +210,80 @@ func TestSendCommandFormatsOutput(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), grpcapi.Status_SENT.String()) {
 		t.Fatalf("expected output to contain status, got %s", output.String())
+	}
+}
+
+func TestSendCommandLoadsAttachments(t *testing.T) {
+	t.Parallel()
+
+	tempFile := filepath.Join(t.TempDir(), "hello.txt")
+	if writeErr := os.WriteFile(tempFile, []byte("hello world"), 0o600); writeErr != nil {
+		t.Fatalf("write temp file: %v", writeErr)
+	}
+
+	stub := &stubClient{}
+	output := &bytes.Buffer{}
+	deps := Dependencies{
+		Sender:           stub,
+		OperationTimeout: time.Second,
+		Output:           output,
+	}
+	cmd := NewRootCommand(deps)
+	cmd.SetArgs([]string{
+		"send",
+		"--type", "email",
+		"--recipient", "user@example.com",
+		"--subject", "Subj",
+		"--message", "Body",
+		"--attachment", tempFile + "::text/plain",
+	})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if len(stub.requests) != 1 {
+		t.Fatalf("expected one request, got %d", len(stub.requests))
+	}
+	req := stub.requests[0]
+	if len(req.Attachments) != 1 {
+		t.Fatalf("expected one attachment, got %d", len(req.Attachments))
+	}
+	if req.Attachments[0].Filename != "hello.txt" {
+		t.Fatalf("unexpected filename %s", req.Attachments[0].Filename)
+	}
+	if string(req.Attachments[0].Data) != "hello world" {
+		t.Fatalf("unexpected attachment content")
+	}
+}
+
+func TestSendCommandRejectsAttachmentsForSms(t *testing.T) {
+	t.Parallel()
+
+	tempFile := filepath.Join(t.TempDir(), "hello.txt")
+	if writeErr := os.WriteFile(tempFile, []byte("hello"), 0o600); writeErr != nil {
+		t.Fatalf("write temp file: %v", writeErr)
+	}
+
+	stub := &stubClient{}
+	deps := Dependencies{
+		Sender:           stub,
+		OperationTimeout: time.Second,
+		Output:           &bytes.Buffer{},
+	}
+	cmd := NewRootCommand(deps)
+	cmd.SetArgs([]string{
+		"send",
+		"--type", "sms",
+		"--recipient", "+15551234567",
+		"--message", "Body",
+		"--attachment", tempFile,
+	})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected error when using attachments with sms")
+	}
+	if !strings.Contains(err.Error(), "attachments are only supported for email") {
+		t.Fatalf("unexpected error %v", err)
 	}
 }

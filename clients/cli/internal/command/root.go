@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/temirov/pinguin/pkg/attachments"
 	"github.com/temirov/pinguin/pkg/grpcapi"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -39,6 +40,7 @@ func buildSendCommand(dependencies Dependencies) *cobra.Command {
 		subjectInput   string
 		messageInput   string
 		scheduledInput string
+		attachmentArgs []string
 	)
 
 	command := &cobra.Command{
@@ -56,6 +58,15 @@ func buildSendCommand(dependencies Dependencies) *cobra.Command {
 				Subject:          subjectInput,
 				Message:          messageInput,
 			}
+
+			attachmentPayloads, attachmentErr := attachments.Load(attachmentArgs)
+			if attachmentErr != nil {
+				return attachmentErr
+			}
+			if notificationType == grpcapi.NotificationType_SMS && len(attachmentPayloads) > 0 {
+				return fmt.Errorf("attachments are only supported for email notifications")
+			}
+			request.Attachments = attachmentPayloads
 
 			if scheduledInput != "" {
 				scheduledTime, parseErr := time.Parse(time.RFC3339, scheduledInput)
@@ -102,6 +113,7 @@ func buildSendCommand(dependencies Dependencies) *cobra.Command {
 	command.Flags().StringVar(&subjectInput, "subject", "", "Email subject (ignored for sms)")
 	command.Flags().StringVar(&messageInput, "message", "", "Notification message")
 	command.Flags().StringVar(&scheduledInput, "scheduled-time", "", "RFC3339 timestamp for scheduled delivery")
+	command.Flags().StringArrayVar(&attachmentArgs, "attachment", nil, "Attachment path (repeatable). Use path::content-type to override MIME type")
 
 	markRequired(command, "type")
 	markRequired(command, "recipient")
