@@ -12,6 +12,24 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
   - Resolved: Added Cobra/Viper CLI with send command, injected gRPC client settings, scheduled-time parsing, and regression tests for request construction/error handling.
 - [x] [PN-19] Support sending email attachments through the gRPC API so clients can include files with notifications.
   - Resolved: Extended the protobuf contract plus server/domain models with `EmailAttachment`, added a persisted `NotificationAttachment` table, enforced attachment limits/validation, and taught the SMTP sender + retry worker to emit multipart MIME payloads. Updated the CLI and sample client with `--attachment` flags backed by a shared loader, refreshed README/docs, and added unit tests (model, service, SMTP, CLI parsing). `go vet ./...` and `go test ./...` could not run in this environment due to the enforced 10s command timeout; please execute them locally.
+- [ ] [PN-20] Add a front-end.
+  Notes:
+    - The front end is a stand alone web app. It uses Google Sign and TAuss backend for JWT generation and authentication
+    - The front end has two pages: 
+    1. The landing page, which carries marketing funbction and also has a login button
+    2. The main page only accessible after the login:
+      - The main page displays a table of all the received messages. it has a column for status: delivered/queued, a time of dlivery, a sender
+      - The table allows editing of queued messages: changing the time of delivery or cancelling the delivery. The status column will have a cancelled and errored statuses.
+      - The main page has a header and the footer from the mpr-ui library (@tools/mpr-ui)
+    - Styling: 
+      1. Use footers and headers and stylign from mpr-ui (@tools/mpr-ui)
+      2. Support theme switch in the footer
+      3. Have a landing page
+    - Backend
+    1. Integrate with TAuth service for the front end JWT verification (use the same secret). The TAuth service and its documentation is under @tools/TAuth. The landing page uses TAuth client to wrap the sign in requests
+    2. The main page uses TAuth client to keep the user signed in
+    3. Prepare docker compose orchestration
+  Deliverable: perform the code analysis and prepare an implementation plan. AS we are integrating with two packages: mpr-ui and Tauth, be sure to consider the plan of integration. Deliver a plan expressed as small atomic tasks in @ISSUES.md
 
 ## Improvements
 
@@ -199,14 +217,3 @@ We shall be able to place the DB file on a docker image in order to preserve dat
 ## Planning
 *do not work on these, not ready*
 
-- [ ] Add a front-end.
-  - The front end is a stand alone web page. It uses Google Sign and TAuss backend for JWT generation and authentication
-  - The web page displays a table of all the received messages. it has a column for status: delivered/queued, a time of dlivery, a sender
-  - The table allows editing of queued messages: changing the time of delivery or cancelling the delivery. The status column will have a cancelled and errored statuses.
-  - Styling: 
-    1. Use footers and headers and stylign from mpr-ui
-    2. Support theme switch
-    3. Have a landing page
-  - Backend
-  1. Integrate with TAuth service for the front end JWT verification (use the same secret). The TAuth service and its documentation is under @tools/TAuth
-  2. Prepare docker compose orchestration
