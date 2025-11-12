@@ -4,19 +4,23 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/temirov/pinguin/internal/config"
 	"github.com/temirov/pinguin/internal/db"
+	"github.com/temirov/pinguin/internal/httpapi"
 	"github.com/temirov/pinguin/internal/model"
 	"github.com/temirov/pinguin/internal/service"
 	"github.com/temirov/pinguin/pkg/grpcapi"
 	"github.com/temirov/pinguin/pkg/grpcutil"
 	"github.com/temirov/pinguin/pkg/logging"
+	sessionvalidator "github.com/tyemirov/tauth/pkg/sessionvalidator"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -225,6 +229,48 @@ func main() {
 	workerCtx, cancelWorker := context.WithCancel(context.Background())
 	defer cancelWorker()
 	go notificationSvc.StartRetryWorker(workerCtx)
+
+	sessionValidator, validatorErr := sessionvalidator.New(sessionvalidator.Config{
+		SigningKey: []byte(configuration.TAuthSigningKey),
+		Issuer:     configuration.TAuthIssuer,
+		CookieName: configuration.TAuthCookieName,
+	})
+	if validatorErr != nil {
+		mainLogger.Error("Failed to initialize session validator", "error", validatorErr)
+		os.Exit(1)
+	}
+
+	httpServer, httpServerErr := httpapi.NewServer(httpapi.Config{
+		ListenAddr:          configuration.HTTPListenAddr,
+		StaticRoot:          configuration.HTTPStaticRoot,
+		AllowedOrigins:      configuration.HTTPAllowedOrigins,
+		SessionValidator:    sessionValidator,
+		NotificationService: notificationSvc,
+		Logger:              mainLogger,
+	})
+	if httpServerErr != nil {
+		mainLogger.Error("Failed to initialize HTTP server", "error", httpServerErr)
+		os.Exit(1)
+	}
+
+	_, cancelHTTP := context.WithCancel(context.Background())
+	defer cancelHTTP()
+	go func() {
+		mainLogger.Info("HTTP server listening", "addr", configuration.HTTPListenAddr)
+		if err := httpServer.Start(); err != nil {
+			if !errors.Is(err, http.ErrServerClosed) {
+				mainLogger.Error("HTTP server crashed", "error", err)
+				cancelHTTP()
+			}
+		}
+	}()
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+			mainLogger.Error("HTTP server shutdown error", "error", err)
+		}
+	}()
 
 	// Set up gRPC server with an authentication interceptor.
 	authInterceptor := func(logger *slog.Logger, requiredToken string) grpc.UnaryServerInterceptor {

@@ -104,6 +104,18 @@ Pinguin is configured via environment variables. Create a `.env` file or export 
 
 - **OPERATION_TIMEOUT_SEC:**  
   Maximum number of seconds to wait for a send attempt before treating it as failed. Set this to `30` seconds unless your provider requires longer operations.
+- **HTTP_LISTEN_ADDR:**  
+  Address used by the Gin HTTP server that serves the UI + JSON API (e.g. `:8080`).
+- **HTTP_STATIC_ROOT:**  
+  Filesystem path that holds the `/web` assets served to browsers.
+- **HTTP_ALLOWED_ORIGINS:**  
+  Comma-separated list of origins allowed to call the JSON API when running cross-origin (leave empty to allow same-origin only).
+- **TAUTH_SIGNING_KEY:**  
+  HS256 signing key shared with the TAuth deployment. Used to validate the `app_session` cookie.
+- **TAUTH_ISSUER:**  
+  Expected JWT issuer written by TAuth (usually `tauth`).
+- **TAUTH_COOKIE_NAME:**  
+  Optional override for the session cookie name. Defaults to `app_session`.
 
 - **MAX_RETRIES:**  
   Maximum number of times the background worker will retry sending a failed notification.
@@ -345,7 +357,23 @@ grpcurl -d '{
    A background worker periodically polls the database for notifications that are still queued or have failed and reattempts sending them with exponential backoff.
 
 4. **Status Retrieval:**  
-   Clients can query the notification’s status using the `GetNotificationStatus` RPC until the status changes to `sent`, `cancelled`, or `errored` (legacy `failed` values are still returned for historical rows).
+   Clients can query the notification’s status using the `GetNotificationStatus` RPC or the `/api/notifications` HTTP endpoint until the status changes to `sent`, `cancelled`, or `errored` (legacy `failed` values are still returned for historical rows).
+
+---
+
+## HTTP API
+
+The gRPC server now ships with a sibling Gin HTTP server that:
+
+- Serves static assets from `HTTP_STATIC_ROOT` (future `/web` front-end).
+- Validates every authenticated request by reading the TAuth `app_session` cookie (via `TAUTH_*` settings and the shared signing key).
+- Exposes JSON endpoints for the UI:
+  - `GET /api/notifications?status=queued&status=errored` – lists stored notifications filtered by status.
+  - `PATCH /api/notifications/:id/schedule` – accepts `{"scheduled_time":"RFC3339"}` to move a queued notification.
+  - `POST /api/notifications/:id/cancel` – cancels queued notifications so workers skip them.
+  - `GET /healthz` – liveness probe (no auth required).
+
+All endpoints emit structured JSON errors (`401` for auth failures, `400` for invalid payloads, `404` when a notification does not exist, `409` when edits are requested for non-queued notifications). CORS is enabled for the origins listed via `HTTP_ALLOWED_ORIGINS`, and credentials are required so the browser sends the TAuth cookie.
 
 ---
 
