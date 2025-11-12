@@ -15,6 +15,8 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 
 ## Improvements
 
+- [x] [PN-21] Add a black-box integration test that schedules an email and confirms it is dispatched only after the scheduled time elapses.
+  - Resolved: Added an injectable notification service constructor plus an integration test that schedules an email, runs the background worker, and asserts the dispatch occurs after the scheduled timestamp and is recorded as sent.
 - [x] [PN-07] Remove all and any mentioning of Sendgrid . Replace it with our own implementation of sending emails to the desination emails. Build a detailed plan of sending emails using SMTP protocol.
   - Resolved: Captured provider-agnostic SMTP delivery documentation, linked it from README, and added a wiring regression test for the in-process SMTP sender.
 - [x] [PN-09] Disable SMS notifications and log the fact that the text notifications are disabled when TWILIO credentials are absent in the environemnt on the start
