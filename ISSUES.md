@@ -25,7 +25,7 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
     3. Prepare docker compose orchestration
   Deliverable: perform the code analysis and prepare an implementation plan. AS we are integrating with two packages: mpr-ui and Tauth, be sure to consider the plan of integration. Deliver a plan expressed as small atomic tasks in @ISSUES.md
   Plan tasks:
-    - [ ] PN-100.A — Extend proto + domain models with `cancelled`/`errored` statuses, add list/update/cancel service methods, and cover new logic with table-driven tests.
+    - [x] PN-100.A — Extend proto + domain models with `cancelled`/`errored` statuses, add list/update/cancel service methods, and cover new logic with table-driven tests. (proto + domain enums updated, new service APIs + retries covered by unit/integration tests)
     - [ ] PN-100.B — Introduce a Gin HTTP server that validates TAuth cookies (via `sessionvalidator`), exposes `/api/notifications` CRUD endpoints, and serves static assets alongside the gRPC process.
     - [ ] PN-100.C — Build the `/web` front-end skeleton (landing + dashboard pages, `constants.js`, `types.d.js`, `core/`, `ui/`, `app.js`) using Alpine factories and mpr-ui header/footer components.
     - [ ] PN-100.D — Implement the dashboard notifications table with inline edit/cancel flows, scheduled-time editor modal, status badges, and DOM-scoped Alpine events.

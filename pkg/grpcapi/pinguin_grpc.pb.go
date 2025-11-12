@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v6.33.0
-// source: pinguin.proto
+// source: proto/pinguin.proto
 
 package grpcapi
 
@@ -159,5 +159,5 @@ var NotificationService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "pinguin.proto",
+	Metadata: "proto/pinguin.proto",
 }

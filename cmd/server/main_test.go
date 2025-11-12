@@ -201,4 +201,16 @@ func (stub *stubNotificationService) GetNotificationStatus(ctx context.Context, 
 	return response, nil
 }
 
+func (stub *stubNotificationService) ListNotifications(ctx context.Context, filters model.NotificationListFilters) ([]model.NotificationResponse, error) {
+	return []model.NotificationResponse{}, nil
+}
+
+func (stub *stubNotificationService) RescheduleNotification(ctx context.Context, notificationID string, scheduledFor time.Time) (model.NotificationResponse, error) {
+	return model.NotificationResponse{}, nil
+}
+
+func (stub *stubNotificationService) CancelNotification(ctx context.Context, notificationID string) (model.NotificationResponse, error) {
+	return model.NotificationResponse{}, nil
+}
+
 func (stub *stubNotificationService) StartRetryWorker(ctx context.Context) {}

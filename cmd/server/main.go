@@ -123,6 +123,10 @@ func mapModelToGrpcResponse(modelResp model.NotificationResponse) *grpcapi.Notif
 		grpcStatus = grpcapi.Status_QUEUED
 	case model.StatusSent:
 		grpcStatus = grpcapi.Status_SENT
+	case model.StatusCancelled:
+		grpcStatus = grpcapi.Status_CANCELLED
+	case model.StatusErrored:
+		grpcStatus = grpcapi.Status_ERRORED
 	case model.StatusFailed:
 		grpcStatus = grpcapi.Status_FAILED
 	default:

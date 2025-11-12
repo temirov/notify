@@ -345,7 +345,7 @@ grpcurl -d '{
    A background worker periodically polls the database for notifications that are still queued or have failed and reattempts sending them with exponential backoff.
 
 4. **Status Retrieval:**  
-   Clients can query the notification’s status using the `GetNotificationStatus` RPC until the status changes to `sent` or `failed`.
+   Clients can query the notification’s status using the `GetNotificationStatus` RPC until the status changes to `sent`, `cancelled`, or `errored` (legacy `failed` values are still returned for historical rows).
 
 ---
 
