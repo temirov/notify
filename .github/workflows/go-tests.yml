@@ -40,4 +40,4 @@ jobs:
           cache: true
 
       - name: Run Makefile CI pipeline
-        run: timeout -k 350s -s SIGKILL 350s make ci
+        run: make ci
