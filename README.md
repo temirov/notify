@@ -181,11 +181,12 @@ export $(cat .env | xargs)
 
 ### Docker Compose deployment
 
-The repository ships with `docker-compose.yaml` to run Pinguin and a companion TAuth instance. The stack exposes:
+The repository ships with `docker-compose.yaml` to run Pinguin alongside TAuth and a static file server (ghttp). The stack exposes:
 
 - gRPC: `localhost:50051`
-- HTTP UI/API: `http://localhost:8080`
+- HTTP API: `http://localhost:8080`
 - TAuth: `http://localhost:8081`
+- Front-end bundle via ghttp: `http://localhost:4173`
 
 1. Copy the sample environment files and update the placeholders. **Use the same signing key in both files** so TAuth and Pinguin agree on JWT validation.
 
@@ -205,7 +206,7 @@ The repository ships with `docker-compose.yaml` to run Pinguin and a companion T
    docker compose up --build
    ```
 
-   Pinguin writes its SQLite file to the Docker-managed volume, serves the web UI from `/web`, and validates browser sessions issued by the colocated TAuth instance. Browse to `http://localhost:8080` to exercise the landing page + dashboard.
+   Pinguin writes its SQLite file to the Docker-managed volume, validates browser sessions issued by the colocated TAuth instance, and exposes the HTTP API on port 8080. The static landing/dashboard bundle is served by ghttp on `http://localhost:4173`.
 
 3. Stop the stack when you are finished:
 
