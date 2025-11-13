@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 
 // NotificationType enumerations: "email" or "sms".
 type NotificationType string
+type NotificationStatus string
 
 const (
 	NotificationEmail NotificationType = "email"
@@ -25,11 +27,52 @@ type EmailAttachment struct {
 
 // Status constants used for the Notification model.
 const (
-	StatusQueued  = "queued"
-	StatusSent    = "sent"
-	StatusFailed  = "failed"
-	StatusUnknown = "unknown"
+	StatusQueued    NotificationStatus = "queued"
+	StatusSent      NotificationStatus = "sent"
+	StatusErrored   NotificationStatus = "errored"
+	StatusCancelled NotificationStatus = "cancelled"
+	StatusUnknown   NotificationStatus = "unknown"
+	StatusFailed    NotificationStatus = "failed" // legacy value kept for previously persisted rows
 )
+
+var ErrNotificationNotFound = errors.New("notification not found")
+
+func CanonicalStatus(status NotificationStatus) NotificationStatus {
+	switch status {
+	case StatusQueued, StatusSent, StatusErrored, StatusCancelled, StatusUnknown:
+		return status
+	case StatusFailed:
+		return StatusErrored
+	default:
+		return ""
+	}
+}
+
+// NotificationListFilters constrain List operations (e.g., by status).
+type NotificationListFilters struct {
+	Statuses []NotificationStatus
+}
+
+// NormalizedStatuses removes duplicates and legacy aliases while preserving order.
+func (filters NotificationListFilters) NormalizedStatuses() []NotificationStatus {
+	if len(filters.Statuses) == 0 {
+		return nil
+	}
+	seen := make(map[NotificationStatus]struct{}, len(filters.Statuses))
+	var normalized []NotificationStatus
+	for _, status := range filters.Statuses {
+		canonical := CanonicalStatus(status)
+		if canonical == "" {
+			continue
+		}
+		if _, exists := seen[canonical]; exists {
+			continue
+		}
+		seen[canonical] = struct{}{}
+		normalized = append(normalized, canonical)
+	}
+	return normalized
+}
 
 // Notification is our main model in the DB, with GORM & JSON tags.
 // You can return this directly via JSON or create a separate struct if you like.
@@ -41,7 +84,7 @@ type Notification struct {
 	Subject           string                   `json:"subject,omitempty"`
 	Message           string                   `json:"message"`
 	ProviderMessageID string                   `json:"provider_message_id"`
-	Status            string                   `json:"status"`
+	Status            NotificationStatus       `json:"status"`
 	RetryCount        int                      `json:"retry_count"`
 	LastAttemptedAt   time.Time                `json:"last_attempted_at"`
 	ScheduledFor      *time.Time               `json:"scheduled_for"`
@@ -74,18 +117,18 @@ type NotificationRequest struct {
 // NotificationResponse is what you'll return to the client.
 // You could also return the Notification itself, but some prefer a separate shape.
 type NotificationResponse struct {
-	NotificationID    string            `json:"notification_id"`
-	NotificationType  NotificationType  `json:"notification_type"`
-	Recipient         string            `json:"recipient"`
-	Subject           string            `json:"subject,omitempty"`
-	Message           string            `json:"message"`
-	Status            string            `json:"status"`
-	ProviderMessageID string            `json:"provider_message_id"`
-	RetryCount        int               `json:"retry_count"`
-	ScheduledFor      *time.Time        `json:"scheduled_for,omitempty"`
-	CreatedAt         time.Time         `json:"created_at"`
-	UpdatedAt         time.Time         `json:"updated_at"`
-	Attachments       []EmailAttachment `json:"attachments,omitempty"`
+	NotificationID    string             `json:"notification_id"`
+	NotificationType  NotificationType   `json:"notification_type"`
+	Recipient         string             `json:"recipient"`
+	Subject           string             `json:"subject,omitempty"`
+	Message           string             `json:"message"`
+	Status            NotificationStatus `json:"status"`
+	ProviderMessageID string             `json:"provider_message_id"`
+	RetryCount        int                `json:"retry_count"`
+	ScheduledFor      *time.Time         `json:"scheduled_for,omitempty"`
+	CreatedAt         time.Time          `json:"created_at"`
+	UpdatedAt         time.Time          `json:"updated_at"`
+	Attachments       []EmailAttachment  `json:"attachments,omitempty"`
 }
 
 // NewNotification constructs a ready-to-insert DB Notification from a request, defaulting status=queued.
@@ -117,13 +160,17 @@ func NewNotificationResponse(n Notification) NotificationResponse {
 		normalizedScheduled := n.ScheduledFor.UTC()
 		scheduledFor = &normalizedScheduled
 	}
+	status := CanonicalStatus(n.Status)
+	if status == "" {
+		status = StatusUnknown
+	}
 	return NotificationResponse{
 		NotificationID:    n.NotificationID,
 		NotificationType:  n.NotificationType,
 		Recipient:         n.Recipient,
 		Subject:           n.Subject,
 		Message:           n.Message,
-		Status:            n.Status,
+		Status:            status,
 		ProviderMessageID: n.ProviderMessageID,
 		RetryCount:        n.RetryCount,
 		ScheduledFor:      scheduledFor,
@@ -159,10 +206,30 @@ func GetQueuedOrFailedNotifications(ctx context.Context, db *gorm.DB, maxRetries
 	var notifications []Notification
 	err := db.WithContext(ctx).
 		Preload("Attachments").
-		Where("(status = ? OR status = ?) AND retry_count < ? AND (scheduled_for IS NULL OR scheduled_for <= ?)",
-			StatusQueued, StatusFailed, maxRetries, currentTime).
+		Where("(status = ? OR status = ? OR status = ?) AND retry_count < ? AND (scheduled_for IS NULL OR scheduled_for <= ?)",
+			StatusQueued, StatusErrored, StatusFailed, maxRetries, currentTime).
 		Find(&notifications).Error
 	if err != nil {
+		return nil, err
+	}
+	return notifications, nil
+}
+
+func ListNotifications(ctx context.Context, db *gorm.DB, filters NotificationListFilters) ([]Notification, error) {
+	query := db.WithContext(ctx).Preload("Attachments").Order("created_at DESC")
+	statuses := filters.NormalizedStatuses()
+	if len(statuses) > 0 {
+		statusStrings := make([]string, 0, len(statuses))
+		for _, status := range statuses {
+			statusStrings = append(statusStrings, string(status))
+			if status == StatusErrored {
+				statusStrings = append(statusStrings, string(StatusFailed))
+			}
+		}
+		query = query.Where("status IN ?", statusStrings)
+	}
+	var notifications []Notification
+	if err := query.Find(&notifications).Error; err != nil {
 		return nil, err
 	}
 	return notifications, nil
@@ -172,9 +239,9 @@ func MustGetNotificationByID(ctx context.Context, db *gorm.DB, notificationID st
 	n, err := GetNotificationByID(ctx, db, notificationID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("notification not found: %s", notificationID)
+			return nil, fmt.Errorf("%w: %s", ErrNotificationNotFound, notificationID)
 		}
-		return nil, err
+		return nil, fmt.Errorf("get_notification_by_id: %w", err)
 	}
 	return n, nil
 }
