@@ -71,6 +71,13 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
     - This effectively enables CSRF for all HTTP endpoints because any site can issue authenticated requests if a user has a TAuth session.
     - Need to either enforce an explicit allowlist or disable credentials when falling back to AllowAllOrigins (per requirement, disable credentials in the fallback).
     - Updated `buildCORS` to disable credentials for the fallback path and added unit tests verifying default vs allowlist behaviour.
+- [x] [BF-305] Playwright fullyParallel mode races shared dev server state.
+  Notes:
+    - `playwright.config.ts` sets `fullyParallel: true`, so each test runs concurrently within a single file.
+    - The mock dev server (`tests/support/devServer.js`) holds notifications in a process-wide array; tests rely on resetting it serially.
+    - Parallel execution causes one test to cancel the only notification while another tries to reschedule it, intermittently disabling buttons and failing assertions.
+    - Disable per-test parallelism (set `fullyParallel` to `false`) so smoke tests run sequentially until the dev server is isolated per worker.
+    - Updated Playwright config, recorded the change in CHANGELOG, and reran the suite to confirm deterministic behaviour.
 
 ## Maintenance (400–499)
 
