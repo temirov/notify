@@ -36,18 +36,47 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 
 ## Improvements (200–299)
 
+- [x] [IM-200] Document docker orchestration quickstart.
+  Notes:
+    - README explains compose services but lacks a cohesive "start the stack" section.
+    - Provide a dedicated quickstart outlining env file prep, `docker compose up`, and URLs (API vs UI) so newcomers can boot the full orchestration confidently.
+    - Added a docker quickstart section (env copies, timed compose commands, port overview) plus changelog note.
+
 ## BugFixes (300–399)
 
 - [x] [BF-300] Dashboard API requests hit ghttp instead of the Pinguin HTTP server.
   Notes:
     - docker-compose now serves `/web` via ghttp on port 4173, but `web/js/constants.js` still uses `apiBaseUrl: '/api'`, so calls are sent to the static host.
     - Need to inject the correct API origin (e.g., `http://localhost:8080/api` or the service hostname inside docker) via runtime config/env. (Fixed by deriving the default from `window.location` and swapping 4173→8080 when detected.)
-- [ ] [BF-301] CORS/README instructions reference the wrong origin.
+- [x] [BF-301] CORS/README instructions reference the wrong origin.
   Notes:
     - `.env.pinguin.example` keeps `HTTP_ALLOWED_ORIGINS=http://localhost:8080`, yet the UI now lives on `http://localhost:4173`, blocking compose-based testing.
     - README still tells users to browse `http://localhost:8080` for the landing page, leading to confusion and blank screens.
+    - Updated the sample env + README docker-compose guidance to default to the ghttp UI origin (`http://localhost:4173`) and documented how to keep `HTTP_ALLOWED_ORIGINS` aligned so browsers can call the API.
+- [x] [BF-302] Scheduled email integration test flakes.
+  Notes:
+    - `timeout -k 30s -s SIGKILL 30s go test ./integration -run ScheduledEmail -count 2` intermittently fails (`expected status sent, got queued`).
+    - Logs show the worker context canceling before the scheduled notification flips to `sent`, so regression scenarios can slip past CI.
+    - Need to stabilize the scheduler test by making notification timing deterministic (e.g., inject controllable clock/tick) or raising the worker wait to ensure the scheduled job executes before assertions.
+    - Added a polling helper (`waitForNotificationStatus`) so the integration test waits for the persisted `sent` status instead of racing the worker, eliminating the flake.
+- [x] [BF-303] Docker compose publishes ghttp on the wrong port.
+  Notes:
+    - `docker-compose.yaml` maps both `ghttp` and `pinguin` services to host port 8080, so the stack fails to start (`port is already allocated`).
+    - README + `.env` expect the static bundle on `http://localhost:4173`, and CORS defaults now reference that origin.
+    - Need to update compose to expose ghttp on 4173 (container 8080), ensure the HTTP server keeps port 8080, and document the change in CHANGELOG + sample env instructions if needed.
+    - Updated `docker-compose.yaml` to publish ghttp on 4173, aligned `.env.tauth.example`/README guidance so TAuth CORS allows the same origin, and recorded the fix in the changelog.
+- [x] [BF-304] CORS defaults allow credentialed requests from any origin.
+  Notes:
+    - When `HTTP_ALLOWED_ORIGINS` is empty, `buildCORS` sets `AllowAllOrigins=true` and `AllowCredentials=true`, so Gin echoes any `Origin` header while still sending cookies.
+    - This effectively enables CSRF for all HTTP endpoints because any site can issue authenticated requests if a user has a TAuth session.
+    - Need to either enforce an explicit allowlist or disable credentials when falling back to AllowAllOrigins (per requirement, disable credentials in the fallback).
+    - Updated `buildCORS` to disable credentials for the fallback path and added unit tests verifying default vs allowlist behaviour.
 
 ## Maintenance (400–499)
 
 ## Planning
 *do not work on these, not ready*
+- [x] [BF-302] Inline config in `web/index.html` / `web/dashboard.html` overrides dynamic API base URL.
+  Notes:
+    - Even after deriving the default in `web/js/constants.js`, the HTML bootstrap sets `window.__PINGUIN_CONFIG__ = { apiBaseUrl: '/api', ... }`, so the browser still calls the static host when served from ghttp.
+    - Remove the hard-coded `apiBaseUrl` (and ideally inject via env if needed) so the runtime detection takes effect.

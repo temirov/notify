@@ -109,7 +109,7 @@ Pinguin is configured via environment variables. Create a `.env` file or export 
 - **HTTP_STATIC_ROOT:**  
   Filesystem path that holds the `/web` assets served to browsers.
 - **HTTP_ALLOWED_ORIGINS:**  
-  Comma-separated list of origins allowed to call the JSON API when running cross-origin (leave empty to allow same-origin only).
+  Comma-separated list of origins allowed to call the JSON API when running cross-origin (leave empty to allow same-origin only). The docker-compose workflow serves the UI via ghttp on `http://localhost:4173`, so keep that origin in the list unless you host the web bundle elsewhere.
 - **TAUTH_SIGNING_KEY:**  
   HS256 signing key shared with the TAuth deployment. Used to validate the `app_session` cookie.
 - **TAUTH_ISSUER:**  
@@ -188,6 +188,8 @@ The repository ships with `docker-compose.yaml` to run Pinguin alongside TAuth a
 - TAuth: `http://localhost:8081`
 - Front-end bundle via ghttp: `http://localhost:4173`
 
+Open `http://localhost:4173` in your browser for the landing/dashboard UI. The HTTP API on `http://localhost:8080` remains available for CLI/grpcurl clients, but browsers should never point to that port directly.
+
 1. Copy the sample environment files and update the placeholders. **Use the same signing key in both files** so TAuth and Pinguin agree on JWT validation.
 
    ```bash
@@ -197,8 +199,11 @@ The repository ships with `docker-compose.yaml` to run Pinguin alongside TAuth a
    ```
 
    - `.env.pinguin` configures the gRPC/HTTP server plus SMTP/Twilio credentials.
+   - When serving the UI via ghttp, ensure `HTTP_ALLOWED_ORIGINS` includes `http://localhost:4173` so CORS accepts dashboard requests.
    - `.env.tauth` configures the Google OAuth client, signing key, and CORS settings for local development.
    - Keep `TAUTH_SIGNING_KEY` (Pinguin) identical to `APP_JWT_SIGNING_KEY` (TAuth) so cookie validation succeeds.
+   - Ensure `HTTP_ALLOWED_ORIGINS` includes the UI host (`http://localhost:4173` when using the bundled ghttp server). Comma-separate additional origins if you front the UI elsewhere.
+   - Match the same UI origin in `.env.tauth` via `APP_CORS_ALLOWED_ORIGINS` so the auth endpoints accept browser requests (use `http://localhost:4173` for the default setup).
 
 2. Build and start the stack (this creates the named Docker volume `pinguin-data` automatically):
 
@@ -219,6 +224,34 @@ To inspect the persisted database file later, run:
 ```bash
 docker volume inspect pinguin-data
 ```
+
+### Docker quickstart (full stack)
+
+1. Copy the sample env files (one command per file so you can edit secrets immediately):
+
+   ```bash
+   timeout -k 5s -s SIGKILL 5s cp .env.pinguin.example .env.pinguin
+   timeout -k 5s -s SIGKILL 5s cp .env.tauth.example .env.tauth
+   ```
+
+2. Edit `.env.pinguin` (SMTP/Twilio + shared signing key) and `.env.tauth` (Google client ID + the same signing key + `APP_CORS_ALLOWED_ORIGINS=["http://localhost:4173"]`).
+3. Start the orchestration:
+
+   ```bash
+   timeout -k 30s -s SIGKILL 30s docker compose up --build
+   ```
+
+   - gRPC server → `localhost:50051`
+   - HTTP API → `http://localhost:8080`
+   - TAuth → `http://localhost:8081`
+   - UI (landing + dashboard) → `http://localhost:4173`
+
+4. Visit `http://localhost:4173` in your browser, sign in via Google/TAuth, and interact with the dashboard (the UI automatically talks to the API on port 8080).
+5. When finished, stop the stack:
+
+   ```bash
+   timeout -k 30s -s SIGKILL 30s docker compose down
+   ```
 
 ---
 
