@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -82,6 +83,10 @@ func NewServer(cfg Config) (*Server, error) {
 
 	if cfg.StaticRoot != "" {
 		staticDir := filepath.Clean(cfg.StaticRoot)
+		absoluteStaticDir, err := filepath.Abs(staticDir)
+		if err != nil {
+			return nil, fmt.Errorf("httpapi: resolve static root: %w", err)
+		}
 		engine.NoRoute(func(contextGin *gin.Context) {
 			requestPath := contextGin.Request.URL.Path
 			if requestPath == "" || requestPath == "/" {
@@ -91,8 +96,13 @@ func NewServer(cfg Config) (*Server, error) {
 			contextGin.Request.URL.RawPath = requestPath
 			cleaned := filepath.Clean(requestPath)
 			cleaned = strings.TrimPrefix(cleaned, string(filepath.Separator))
-			fullPath := filepath.Join(staticDir, cleaned)
-			if !strings.HasPrefix(fullPath, staticDir) {
+			joined := filepath.Join(absoluteStaticDir, cleaned)
+			fullPath, err := filepath.Abs(joined)
+			if err != nil {
+				contextGin.Status(http.StatusNotFound)
+				return
+			}
+			if fullPath != absoluteStaticDir && !strings.HasPrefix(fullPath, absoluteStaticDir+string(filepath.Separator)) {
 				contextGin.Status(http.StatusNotFound)
 				return
 			}
