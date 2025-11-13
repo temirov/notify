@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Stabilized the scheduled email integration test by waiting for the persisted `sent` status so CI no longer flakes on BF-302.
 - Fixed the sample `HTTP_ALLOWED_ORIGINS` value and README docker-compose instructions so compose users open the UI on `http://localhost:4173` and the HTTP API accepts requests from that origin (BF-301).
 - Added GoDoc coverage for all client-facing packages (client, attachments, grpcapi, grpcutil, logging) so integrators can rely on `go doc` to understand how to embed the SDK.
 - Added a scheduling integration test backed by injectable senders to ensure emails queued with future timestamps are dispatched only after the background worker releases them.

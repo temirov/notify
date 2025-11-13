@@ -47,6 +47,12 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
     - `.env.pinguin.example` keeps `HTTP_ALLOWED_ORIGINS=http://localhost:8080`, yet the UI now lives on `http://localhost:4173`, blocking compose-based testing.
     - README still tells users to browse `http://localhost:8080` for the landing page, leading to confusion and blank screens.
     - Updated the sample env + README docker-compose guidance to default to the ghttp UI origin (`http://localhost:4173`) and documented how to keep `HTTP_ALLOWED_ORIGINS` aligned so browsers can call the API.
+- [x] [BF-302] Scheduled email integration test flakes.
+  Notes:
+    - `timeout -k 30s -s SIGKILL 30s go test ./integration -run ScheduledEmail -count 2` intermittently fails (`expected status sent, got queued`).
+    - Logs show the worker context canceling before the scheduled notification flips to `sent`, so regression scenarios can slip past CI.
+    - Need to stabilize the scheduler test by making notification timing deterministic (e.g., inject controllable clock/tick) or raising the worker wait to ensure the scheduled job executes before assertions.
+    - Added a polling helper (`waitForNotificationStatus`) so the integration test waits for the persisted `sent` status instead of racing the worker, eliminating the flake.
 
 ## Maintenance (400–499)
 
