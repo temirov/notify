@@ -36,6 +36,12 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 
 ## Improvements (200–299)
 
+- [x] [IM-200] Document docker orchestration quickstart.
+  Notes:
+    - README explains compose services but lacks a cohesive "start the stack" section.
+    - Provide a dedicated quickstart outlining env file prep, `docker compose up`, and URLs (API vs UI) so newcomers can boot the full orchestration confidently.
+    - Added a docker quickstart section (env copies, timed compose commands, port overview) plus changelog note.
+
 ## BugFixes (300–399)
 
 - [x] [BF-300] Dashboard API requests hit ghttp instead of the Pinguin HTTP server.
@@ -53,6 +59,12 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
     - Logs show the worker context canceling before the scheduled notification flips to `sent`, so regression scenarios can slip past CI.
     - Need to stabilize the scheduler test by making notification timing deterministic (e.g., inject controllable clock/tick) or raising the worker wait to ensure the scheduled job executes before assertions.
     - Added a polling helper (`waitForNotificationStatus`) so the integration test waits for the persisted `sent` status instead of racing the worker, eliminating the flake.
+- [x] [BF-303] Docker compose publishes ghttp on the wrong port.
+  Notes:
+    - `docker-compose.yaml` maps both `ghttp` and `pinguin` services to host port 8080, so the stack fails to start (`port is already allocated`).
+    - README + `.env` expect the static bundle on `http://localhost:4173`, and CORS defaults now reference that origin.
+    - Need to update compose to expose ghttp on 4173 (container 8080), ensure the HTTP server keeps port 8080, and document the change in CHANGELOG + sample env instructions if needed.
+    - Updated `docker-compose.yaml` to publish ghttp on 4173, aligned `.env.tauth.example`/README guidance so TAuth CORS allows the same origin, and recorded the fix in the changelog.
 
 ## Maintenance (400–499)
 
