@@ -202,6 +202,7 @@ Open `http://localhost:4173` in your browser for the landing/dashboard UI. The H
    - `.env.tauth` configures the Google OAuth client, signing key, and CORS settings for local development.
    - Keep `TAUTH_SIGNING_KEY` (Pinguin) identical to `APP_JWT_SIGNING_KEY` (TAuth) so cookie validation succeeds.
    - Ensure `HTTP_ALLOWED_ORIGINS` includes the UI host (`http://localhost:4173` when using the bundled ghttp server). Comma-separate additional origins if you front the UI elsewhere.
+   - Match the same UI origin in `.env.tauth` via `APP_CORS_ALLOWED_ORIGINS` so the auth endpoints accept browser requests (use `http://localhost:4173` for the default setup).
 
 2. Build and start the stack (this creates the named Docker volume `pinguin-data` automatically):
 
