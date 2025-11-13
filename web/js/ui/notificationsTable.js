@@ -31,14 +31,19 @@ const inputFormatter = {
 };
 
 /**
- * @param {{ apiClient: ReturnType<typeof import('../core/apiClient.js').createApiClient>, strings: typeof import('../constants.js').STRINGS.dashboard }} options
+ * @param {{
+ *   apiClient: ReturnType<typeof import('../core/apiClient.js').createApiClient>,
+ *   strings: typeof import('../constants.js').STRINGS.dashboard,
+ *   actions: typeof import('../constants.js').STRINGS.actions,
+ * }} options
  */
 export function createNotificationsTable(options) {
-  const { apiClient } = options;
+  const { apiClient, strings, actions } = options;
   const authStore = () => window.Alpine.store('auth');
 
   return {
-    strings: options.strings,
+    strings,
+    actions,
     notifications: /** @type {NotificationItem[]} */ ([]),
     statusFilter: 'all',
     isLoading: false,

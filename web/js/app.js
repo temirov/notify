@@ -17,7 +17,11 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('landingAuthPanel', () => createLandingAuthPanel(authController));
   Alpine.data('dashboardShell', () => createDashboardShell(authController));
   Alpine.data('notificationsTable', () =>
-    createNotificationsTable({ apiClient, strings: STRINGS.dashboard }),
+    createNotificationsTable({
+      apiClient,
+      strings: STRINGS.dashboard,
+      actions: STRINGS.actions,
+    }),
   );
   Alpine.data('toastCenter', () => createToastCenter());
 });
