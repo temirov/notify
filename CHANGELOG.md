@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added a “Docker quickstart” section to README so operators can boot the full orchestration (Pinguin + TAuth + ghttp) with timed commands on the documented ports (IM-200).
 - Corrected docker-compose so the ghttp static host binds to `http://localhost:4173` (matching docs/CORS defaults) and updated the TAuth sample `.env`/README instructions accordingly (BF-303).
 - Stabilized the scheduled email integration test by waiting for the persisted `sent` status so CI no longer flakes on BF-302.
 - Fixed the sample `HTTP_ALLOWED_ORIGINS` value and README docker-compose instructions so compose users open the UI on `http://localhost:4173` and the HTTP API accepts requests from that origin (BF-301).
