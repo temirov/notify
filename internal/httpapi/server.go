@@ -217,6 +217,11 @@ func (handler *notificationHandler) listNotifications(contextGin *gin.Context) {
 }
 
 func (handler *notificationHandler) rescheduleNotification(contextGin *gin.Context) {
+	notificationID := strings.TrimSpace(contextGin.Param("id"))
+	if notificationID == "" {
+		contextGin.JSON(http.StatusBadRequest, gin.H{"error": "notification_id is required"})
+		return
+	}
 	var payload struct {
 		ScheduledTime string `json:"scheduled_time"`
 	}
@@ -233,7 +238,7 @@ func (handler *notificationHandler) rescheduleNotification(contextGin *gin.Conte
 		contextGin.JSON(http.StatusBadRequest, gin.H{"error": "scheduled_time must be RFC3339"})
 		return
 	}
-	response, svcErr := handler.service.RescheduleNotification(contextGin.Request.Context(), contextGin.Param("id"), parsedTime)
+	response, svcErr := handler.service.RescheduleNotification(contextGin.Request.Context(), notificationID, parsedTime)
 	if svcErr != nil {
 		handler.writeError(contextGin, svcErr)
 		return
@@ -242,7 +247,12 @@ func (handler *notificationHandler) rescheduleNotification(contextGin *gin.Conte
 }
 
 func (handler *notificationHandler) cancelNotification(contextGin *gin.Context) {
-	response, err := handler.service.CancelNotification(contextGin.Request.Context(), contextGin.Param("id"))
+	notificationID := strings.TrimSpace(contextGin.Param("id"))
+	if notificationID == "" {
+		contextGin.JSON(http.StatusBadRequest, gin.H{"error": "notification_id is required"})
+		return
+	}
+	response, err := handler.service.CancelNotification(contextGin.Request.Context(), notificationID)
 	if err != nil {
 		handler.writeError(contextGin, err)
 		return
@@ -252,6 +262,8 @@ func (handler *notificationHandler) cancelNotification(contextGin *gin.Context) 
 
 func (handler *notificationHandler) writeError(contextGin *gin.Context, err error) {
 	switch {
+	case isMissingNotificationID(err):
+		contextGin.JSON(http.StatusBadRequest, gin.H{"error": "notification_id is required"})
 	case errors.Is(err, service.ErrNotificationNotEditable):
 		contextGin.JSON(http.StatusConflict, gin.H{"error": "notification can only be edited while queued"})
 	case errors.Is(err, service.ErrScheduleInPast):
@@ -262,6 +274,13 @@ func (handler *notificationHandler) writeError(contextGin *gin.Context, err erro
 		handler.logger.Error("http_handler_error", "error", err)
 		contextGin.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 	}
+}
+
+func isMissingNotificationID(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "missing notification_id")
 }
 
 func parseStatusFilters(values []string) []model.NotificationStatus {

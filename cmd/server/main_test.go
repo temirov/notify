@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -439,6 +441,113 @@ func TestCancelNotificationValidatesAndForwardsRequest(t *testing.T) {
 	}
 }
 
+func TestBuildAuthInterceptorRejectsUnauthorizedRequests(t *testing.T) {
+	t.Helper()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+	interceptor := buildAuthInterceptor(logger, "expected-token")
+	expectedResponse := "ok"
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return expectedResponse, nil
+	}
+
+	testCases := []struct {
+		name            string
+		ctx             context.Context
+		expectedMessage string
+	}{
+		{
+			name:            "MissingMetadata",
+			ctx:             context.Background(),
+			expectedMessage: "missing metadata",
+		},
+		{
+			name:            "MissingAuthorizationHeader",
+			ctx:             metadata.NewIncomingContext(context.Background(), metadata.New(map[string]string{})),
+			expectedMessage: "missing authorization header",
+		},
+		{
+			name: "InvalidAuthorizationFormat",
+			ctx: metadata.NewIncomingContext(
+				context.Background(),
+				metadata.New(map[string]string{"authorization": "Token value"}),
+			),
+			expectedMessage: "invalid authorization header",
+		},
+		{
+			name: "InvalidToken",
+			ctx: metadata.NewIncomingContext(
+				context.Background(),
+				metadata.New(map[string]string{"authorization": "Bearer other-token"}),
+			),
+			expectedMessage: "invalid token",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Helper()
+
+			_, err := interceptor(testCase.ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/notifications.test"}, handler)
+			if err == nil {
+				t.Fatalf("expected error")
+			}
+			if status.Code(err) != codes.Unauthenticated {
+				t.Fatalf("expected unauthenticated, got %v", status.Code(err))
+			}
+			if status.Convert(err).Message() != testCase.expectedMessage {
+				t.Fatalf("unexpected message %q", status.Convert(err).Message())
+			}
+		})
+	}
+
+	validCtx := metadata.NewIncomingContext(
+		context.Background(),
+		metadata.New(map[string]string{"authorization": "Bearer expected-token"}),
+	)
+	response, err := interceptor(validCtx, nil, &grpc.UnaryServerInfo{FullMethod: "/notifications.test"}, handler)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if response != expectedResponse {
+		t.Fatalf("unexpected response %v", response)
+	}
+}
+
+func TestBuildAuthInterceptorDoesNotLogTokenValue(t *testing.T) {
+	t.Helper()
+
+	var buffer bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buffer, &slog.HandlerOptions{}))
+	interceptor := buildAuthInterceptor(logger, "super-secret-token")
+
+	ctx := metadata.NewIncomingContext(
+		context.Background(),
+		metadata.New(map[string]string{"authorization": "Bearer another-token"}),
+	)
+
+	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/notifications.test"}, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return nil, nil
+	})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("expected unauthenticated, got %v", status.Code(err))
+	}
+
+	logOutput := buffer.String()
+	if !strings.Contains(logOutput, "Invalid token provided") {
+		t.Fatalf("expected log message to mention invalid token, got %q", logOutput)
+	}
+	if strings.Contains(logOutput, "super-secret-token") {
+		t.Fatalf("log output should not contain the expected token: %q", logOutput)
+	}
+	if strings.Contains(logOutput, "another-token") {
+		t.Fatalf("log output should not contain the provided token value: %q", logOutput)
+	}
+}
+
 func startTestNotificationServer(t *testing.T, svc service.NotificationService, token string) (string, func()) {
 	t.Helper()
 
@@ -464,26 +573,6 @@ func startTestNotificationServer(t *testing.T, svc service.NotificationService, 
 	}
 
 	return listener.Addr().String(), shutdown
-}
-
-func buildAuthInterceptor(logger *slog.Logger, expectedToken string) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		metadataValues, ok := metadata.FromIncomingContext(ctx)
-		if !ok {
-			logger.Error("missing metadata")
-			return nil, context.Canceled
-		}
-		headers := metadataValues.Get("authorization")
-		if len(headers) == 0 {
-			logger.Error("missing authorization header")
-			return nil, context.Canceled
-		}
-		if headers[0] != "Bearer "+expectedToken {
-			logger.Error("invalid token", "value", headers[0])
-			return nil, context.Canceled
-		}
-		return handler(ctx, req)
-	}
 }
 
 type stubNotificationService struct {

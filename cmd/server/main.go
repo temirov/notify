@@ -288,6 +288,32 @@ func mapGrpcStatuses(source []grpcapi.Status) []model.NotificationStatus {
 	return result
 }
 
+func buildAuthInterceptor(logger *slog.Logger, requiredToken string) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		metadataValues, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			logger.Error("Missing metadata in gRPC request")
+			return nil, status.Error(codes.Unauthenticated, "missing metadata")
+		}
+		authorizationHeaders := metadataValues.Get("authorization")
+		if len(authorizationHeaders) == 0 {
+			logger.Error("Missing authorization header")
+			return nil, status.Error(codes.Unauthenticated, "missing authorization header")
+		}
+		headerValue := authorizationHeaders[0]
+		if !strings.HasPrefix(headerValue, "Bearer ") {
+			logger.Error("Invalid authorization header format")
+			return nil, status.Error(codes.Unauthenticated, "invalid authorization header")
+		}
+		token := strings.TrimPrefix(headerValue, "Bearer ")
+		if token != requiredToken {
+			logger.Error("Invalid token provided")
+			return nil, status.Error(codes.Unauthenticated, "invalid token")
+		}
+		return handler(ctx, req)
+	}
+}
+
 func main() {
 	configuration, configErr := config.LoadConfig()
 	if configErr != nil {
@@ -354,36 +380,10 @@ func main() {
 		}
 	}()
 
-	// Set up gRPC server with an authentication interceptor.
-	authInterceptor := func(logger *slog.Logger, requiredToken string) grpc.UnaryServerInterceptor {
-		return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-			md, ok := metadata.FromIncomingContext(ctx)
-			if !ok {
-				logger.Error("Missing metadata in gRPC request")
-				return nil, fmt.Errorf("missing metadata")
-			}
-			authHeaders := md["authorization"]
-			if len(authHeaders) == 0 {
-				logger.Error("Missing authorization header")
-				return nil, fmt.Errorf("missing authorization header")
-			}
-			if !strings.HasPrefix(authHeaders[0], "Bearer ") {
-				logger.Error("Invalid authorization header format")
-				return nil, fmt.Errorf("invalid authorization header")
-			}
-			token := strings.TrimPrefix(authHeaders[0], "Bearer ")
-			if token != configuration.GRPCAuthToken {
-				logger.Error("Invalid token provided", "got", token)
-				return nil, fmt.Errorf("invalid token")
-			}
-			return handler(ctx, req)
-		}
-	}
-
 	grpcServer := grpc.NewServer(
 		grpc.MaxRecvMsgSize(grpcutil.MaxMessageSizeBytes),
 		grpc.MaxSendMsgSize(grpcutil.MaxMessageSizeBytes),
-		grpc.UnaryInterceptor(authInterceptor(mainLogger, configuration.GRPCAuthToken)),
+		grpc.UnaryInterceptor(buildAuthInterceptor(mainLogger, configuration.GRPCAuthToken)),
 	)
 	grpcapi.RegisterNotificationServiceServer(grpcServer, &notificationServiceServer{
 		notificationService: notificationSvc,

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -78,6 +79,45 @@ func TestRescheduleValidation(t *testing.T) {
 	}
 }
 
+func TestRescheduleNotificationRejectsEmptyID(t *testing.T) {
+	t.Helper()
+
+	stubSvc := &stubNotificationService{}
+	server := newTestHTTPServer(t, stubSvc, &stubValidator{})
+
+	recorder := httptest.NewRecorder()
+	requestBody := `{"scheduled_time":"2024-01-02T15:04:05Z"}`
+	request := httptest.NewRequest(http.MethodPatch, "/api/notifications/%20/schedule", bytes.NewBufferString(requestBody))
+	request.Header.Set("Content-Type", "application/json")
+
+	server.httpServer.Handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", recorder.Code)
+	}
+	if stubSvc.rescheduleCalls != 0 {
+		t.Fatalf("expected no service invocation, got %d", stubSvc.rescheduleCalls)
+	}
+}
+
+func TestRescheduleNotificationMapsMissingIDErrorToBadRequest(t *testing.T) {
+	t.Helper()
+
+	stubSvc := &stubNotificationService{rescheduleErr: fmt.Errorf("missing notification_id")}
+	server := newTestHTTPServer(t, stubSvc, &stubValidator{})
+
+	recorder := httptest.NewRecorder()
+	requestBody := `{"scheduled_time":"2024-01-02T15:04:05Z"}`
+	request := httptest.NewRequest(http.MethodPatch, "/api/notifications/notif-1/schedule", bytes.NewBufferString(requestBody))
+	request.Header.Set("Content-Type", "application/json")
+
+	server.httpServer.Handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", recorder.Code)
+	}
+}
+
 func TestCancelNotificationErrorMapping(t *testing.T) {
 	t.Helper()
 
@@ -86,6 +126,11 @@ func TestCancelNotificationErrorMapping(t *testing.T) {
 		cancelError  error
 		expectedCode int
 	}{
+		{
+			name:         "MissingNotificationID",
+			cancelError:  fmt.Errorf("missing notification_id"),
+			expectedCode: http.StatusBadRequest,
+		},
 		{
 			name:         "Conflict",
 			cancelError:  service.ErrNotificationNotEditable,
@@ -118,6 +163,25 @@ func TestCancelNotificationErrorMapping(t *testing.T) {
 				t.Fatalf("expected %d, got %d", testCase.expectedCode, recorder.Code)
 			}
 		})
+	}
+}
+
+func TestCancelNotificationRejectsEmptyID(t *testing.T) {
+	t.Helper()
+
+	stubSvc := &stubNotificationService{}
+	server := newTestHTTPServer(t, stubSvc, &stubValidator{})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/notifications/%20/cancel", nil)
+
+	server.httpServer.Handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", recorder.Code)
+	}
+	if stubSvc.cancelCalls != 0 {
+		t.Fatalf("expected no service invocation, got %d", stubSvc.cancelCalls)
 	}
 }
 
@@ -231,8 +295,12 @@ type stubNotificationService struct {
 	listErr            error
 	rescheduleResponse model.NotificationResponse
 	rescheduleErr      error
+	rescheduleCalls    int
+	lastRescheduleID   string
 	cancelResponse     model.NotificationResponse
 	cancelErr          error
+	cancelCalls        int
+	lastCancelID       string
 }
 
 func (stub *stubNotificationService) SendNotification(context.Context, model.NotificationRequest) (model.NotificationResponse, error) {
@@ -247,11 +315,19 @@ func (stub *stubNotificationService) ListNotifications(context.Context, model.No
 	return stub.listResponse, stub.listErr
 }
 
-func (stub *stubNotificationService) RescheduleNotification(context.Context, string, time.Time) (model.NotificationResponse, error) {
-	return stub.rescheduleResponse, stub.rescheduleErr
+func (stub *stubNotificationService) RescheduleNotification(_ context.Context, notificationID string, scheduledFor time.Time) (model.NotificationResponse, error) {
+	stub.rescheduleCalls++
+	stub.lastRescheduleID = notificationID
+	_ = scheduledFor
+	if stub.rescheduleErr != nil {
+		return model.NotificationResponse{}, stub.rescheduleErr
+	}
+	return stub.rescheduleResponse, nil
 }
 
-func (stub *stubNotificationService) CancelNotification(context.Context, string) (model.NotificationResponse, error) {
+func (stub *stubNotificationService) CancelNotification(_ context.Context, notificationID string) (model.NotificationResponse, error) {
+	stub.cancelCalls++
+	stub.lastCancelID = notificationID
 	if stub.cancelErr != nil {
 		return model.NotificationResponse{}, stub.cancelErr
 	}
