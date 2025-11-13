@@ -253,14 +253,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	_, cancelHTTP := context.WithCancel(context.Background())
-	defer cancelHTTP()
 	go func() {
 		mainLogger.Info("HTTP server listening", "addr", configuration.HTTPListenAddr)
 		if err := httpServer.Start(); err != nil {
 			if !errors.Is(err, http.ErrServerClosed) {
 				mainLogger.Error("HTTP server crashed", "error", err)
-				cancelHTTP()
+				os.Exit(1)
 			}
 		}
 	}()
