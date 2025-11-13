@@ -51,3 +51,7 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 
 ## Planning
 *do not work on these, not ready*
+- [x] [BF-302] Inline config in `web/index.html` / `web/dashboard.html` overrides dynamic API base URL.
+  Notes:
+    - Even after deriving the default in `web/js/constants.js`, the HTML bootstrap sets `window.__PINGUIN_CONFIG__ = { apiBaseUrl: '/api', ... }`, so the browser still calls the static host when served from ghttp.
+    - Remove the hard-coded `apiBaseUrl` (and ideally inject via env if needed) so the runtime detection takes effect.
