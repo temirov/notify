@@ -36,6 +36,12 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 
 ## Improvements (200–299)
 
+- [x] [IM-200] Document docker orchestration quickstart.
+  Notes:
+    - README explains compose services but lacks a cohesive "start the stack" section.
+    - Provide a dedicated quickstart outlining env file prep, `docker compose up`, and URLs (API vs UI) so newcomers can boot the full orchestration confidently.
+    - Added a docker quickstart section (env copies, timed compose commands, port overview) plus changelog note.
+
 ## BugFixes (300–399)
 
 - [x] [BF-300] Dashboard API requests hit ghttp instead of the Pinguin HTTP server.
