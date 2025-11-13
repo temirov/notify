@@ -109,6 +109,63 @@ func (server *notificationServiceServer) GetNotificationStatus(ctx context.Conte
 	return mapModelToGrpcResponse(modelResponse), nil
 }
 
+func (server *notificationServiceServer) ListNotifications(ctx context.Context, req *grpcapi.ListNotificationsRequest) (*grpcapi.ListNotificationsResponse, error) {
+	filters := model.NotificationListFilters{}
+	if req != nil {
+		filters.Statuses = mapGrpcStatuses(req.GetStatuses())
+	}
+
+	responses, err := server.notificationService.ListNotifications(ctx, filters)
+	if err != nil {
+		server.logger.Error("Service ListNotifications error", "error", err)
+		return nil, err
+	}
+
+	grpcNotifications := make([]*grpcapi.NotificationResponse, 0, len(responses))
+	for _, response := range responses {
+		grpcNotifications = append(grpcNotifications, mapModelToGrpcResponse(response))
+	}
+
+	return &grpcapi.ListNotificationsResponse{Notifications: grpcNotifications}, nil
+}
+
+func (server *notificationServiceServer) RescheduleNotification(ctx context.Context, req *grpcapi.RescheduleNotificationRequest) (*grpcapi.NotificationResponse, error) {
+	if req.GetNotificationId() == "" {
+		server.logger.Error("Missing notification ID for reschedule")
+		return nil, status.Error(codes.InvalidArgument, "notification_id is required")
+	}
+	if req.ScheduledTime == nil {
+		server.logger.Error("Missing scheduled time for reschedule")
+		return nil, status.Error(codes.InvalidArgument, "scheduled_time is required")
+	}
+	if err := req.ScheduledTime.CheckValid(); err != nil {
+		server.logger.Error("Invalid scheduled timestamp", "error", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid scheduled_time: %v", err)
+	}
+
+	scheduledFor := req.ScheduledTime.AsTime().UTC()
+	modelResponse, err := server.notificationService.RescheduleNotification(ctx, req.GetNotificationId(), scheduledFor)
+	if err != nil {
+		server.logger.Error("Service RescheduleNotification error", "error", err)
+		return nil, err
+	}
+	return mapModelToGrpcResponse(modelResponse), nil
+}
+
+func (server *notificationServiceServer) CancelNotification(ctx context.Context, req *grpcapi.CancelNotificationRequest) (*grpcapi.NotificationResponse, error) {
+	if req.GetNotificationId() == "" {
+		server.logger.Error("Missing notification ID for cancel")
+		return nil, status.Error(codes.InvalidArgument, "notification_id is required")
+	}
+
+	modelResponse, err := server.notificationService.CancelNotification(ctx, req.GetNotificationId())
+	if err != nil {
+		server.logger.Error("Service CancelNotification error", "error", err)
+		return nil, err
+	}
+	return mapModelToGrpcResponse(modelResponse), nil
+}
+
 // mapModelToGrpcResponse converts a model.NotificationResponse to a grpcapi.NotificationResponse.
 func mapModelToGrpcResponse(modelResp model.NotificationResponse) *grpcapi.NotificationResponse {
 	var grpcNotifType grpcapi.NotificationType
@@ -200,6 +257,33 @@ func mapModelAttachments(source []model.EmailAttachment) []*grpcapi.EmailAttachm
 			ContentType: attachment.ContentType,
 			Data:        clonedData,
 		})
+	}
+	return result
+}
+
+func mapGrpcStatuses(source []grpcapi.Status) []model.NotificationStatus {
+	if len(source) == 0 {
+		return nil
+	}
+	result := make([]model.NotificationStatus, 0, len(source))
+	for _, statusValue := range source {
+		switch statusValue {
+		case grpcapi.Status_QUEUED:
+			result = append(result, model.StatusQueued)
+		case grpcapi.Status_SENT:
+			result = append(result, model.StatusSent)
+		case grpcapi.Status_FAILED:
+			result = append(result, model.StatusFailed)
+		case grpcapi.Status_CANCELLED:
+			result = append(result, model.StatusCancelled)
+		case grpcapi.Status_ERRORED:
+			result = append(result, model.StatusErrored)
+		case grpcapi.Status_UNKNOWN:
+			result = append(result, model.StatusUnknown)
+		}
+	}
+	if len(result) == 0 {
+		return nil
 	}
 	return result
 }

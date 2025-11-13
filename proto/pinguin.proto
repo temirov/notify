@@ -59,8 +59,32 @@ message GetNotificationStatusRequest {
   string notification_id = 1;
 }
 
+// Request for listing notifications.
+message ListNotificationsRequest {
+  repeated Status statuses = 1;
+}
+
+// Response containing notifications for list requests.
+message ListNotificationsResponse {
+  repeated NotificationResponse notifications = 1;
+}
+
+// Request to reschedule a queued notification.
+message RescheduleNotificationRequest {
+  string notification_id = 1;
+  google.protobuf.Timestamp scheduled_time = 2;
+}
+
+// Request to cancel a queued notification.
+message CancelNotificationRequest {
+  string notification_id = 1;
+}
+
 // NotificationService defines two RPC methods.
 service NotificationService {
   rpc SendNotification(NotificationRequest) returns (NotificationResponse);
   rpc GetNotificationStatus(GetNotificationStatusRequest) returns (NotificationResponse);
+  rpc ListNotifications(ListNotificationsRequest) returns (ListNotificationsResponse);
+  rpc RescheduleNotification(RescheduleNotificationRequest) returns (NotificationResponse);
+  rpc CancelNotification(CancelNotificationRequest) returns (NotificationResponse);
 }
