@@ -1,17 +1,31 @@
 services:
+  tauth:
+    image: ghcr.io/tyemirov/tauth:latest
+    container_name: tauth
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    env_file:
+      - .env.tauth
+
   pinguin:
     build:
       context: .
     container_name: pinguin
     restart: unless-stopped
+    depends_on:
+      - tauth
     ports:
       - "50051:50051"
+      - "8080:8080"
     env_file:
       - .env.pinguin
     volumes:
       - pinguin-data:/var/lib/pinguin
+      - ./web:/web:ro
     environment:
       DATABASE_PATH: /var/lib/pinguin/pinguin.db
+      HTTP_STATIC_ROOT: /web
 
 volumes:
   pinguin-data:

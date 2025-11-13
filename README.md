@@ -181,16 +181,23 @@ export $(cat .env | xargs)
 
 ### Docker Compose deployment
 
-The repository ships with `docker-compose.yaml` to run Pinguin in a container while storing the SQLite database on a named Docker volume.
+The repository ships with `docker-compose.yaml` to run Pinguin and a companion TAuth instance. The stack exposes:
 
-1. Copy the sample environment file and update the placeholders:
+- gRPC: `localhost:50051`
+- HTTP UI/API: `http://localhost:8080`
+- TAuth: `http://localhost:8081`
+
+1. Copy the sample environment files and update the placeholders. **Use the same signing key in both files** so TAuth and Pinguin agree on JWT validation.
 
    ```bash
    cp .env.pinguin.example .env.pinguin
-   ${EDITOR:-vi} .env.pinguin
+   cp .env.tauth.example .env.tauth
+   ${EDITOR:-vi} .env.pinguin .env.tauth
    ```
 
-   Ensure `DATABASE_PATH=/var/lib/pinguin/pinguin.db` remains set so the server writes into the mounted directory.
+   - `.env.pinguin` configures the gRPC/HTTP server plus SMTP/Twilio credentials.
+   - `.env.tauth` configures the Google OAuth client, signing key, and CORS settings for local development.
+   - Keep `TAUTH_SIGNING_KEY` (Pinguin) identical to `APP_JWT_SIGNING_KEY` (TAuth) so cookie validation succeeds.
 
 2. Build and start the stack (this creates the named Docker volume `pinguin-data` automatically):
 
@@ -198,7 +205,7 @@ The repository ships with `docker-compose.yaml` to run Pinguin in a container wh
    docker compose up --build
    ```
 
-   The server listens on `localhost:50051` and writes the SQLite file to the Docker-managed volume. The container runs as root, so no manual permission adjustments are required for the mounted volume.
+   Pinguin writes its SQLite file to the Docker-managed volume, serves the web UI from `/web`, and validates browser sessions issued by the colocated TAuth instance. Browse to `http://localhost:8080` to exercise the landing page + dashboard.
 
 3. Stop the stack when you are finished:
 
