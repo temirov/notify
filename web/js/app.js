@@ -103,22 +103,57 @@ function createDashboardShell(controller) {
   return {
     strings: STRINGS.dashboard,
     actions: STRINGS.actions,
+    stopAuthWatcher: null,
+    stopStatusWatcher: null,
+    hasHydrated: false,
+    hasRedirected: false,
+    previousAuthState: false,
     init() {
-      this.$watch(
-        () => window.Alpine.store('auth').isAuthenticated,
+      const authStore = window.Alpine.store('auth');
+      this.previousAuthState = authStore.isAuthenticated;
+      this.hasHydrated = false;
+      this.hasRedirected = false;
+      this.stopAuthWatcher = this.$watch(
+        () => authStore.isAuthenticated,
         (isAuthenticated) => {
-          if (!isAuthenticated) {
-            window.location.assign(RUNTIME_CONFIG.landingUrl);
+          const shouldRedirect =
+            !isAuthenticated && (this.previousAuthState || this.hasHydrated);
+          this.previousAuthState = isAuthenticated;
+          if (shouldRedirect) {
+            this.redirectToLanding();
           }
         },
       );
+      this.stopStatusWatcher = controller.onStatusChange((status) => {
+        if (status === 'ready' || status === 'error') {
+          this.hasHydrated = true;
+          if (!authStore.isAuthenticated) {
+            this.redirectToLanding();
+          }
+        }
+      });
     },
     refreshNotifications() {
       dispatchRefresh();
     },
     async handleLogout() {
       await controller.logout();
+      this.redirectToLanding();
+    },
+    redirectToLanding() {
+      if (this.hasRedirected) {
+        return;
+      }
+      this.hasRedirected = true;
       window.location.assign(RUNTIME_CONFIG.landingUrl);
+    },
+    $cleanup() {
+      if (typeof this.stopAuthWatcher === 'function') {
+        this.stopAuthWatcher();
+      }
+      if (typeof this.stopStatusWatcher === 'function') {
+        this.stopStatusWatcher();
+      }
     },
   };
 }
