@@ -11,7 +11,6 @@
     <link rel="stylesheet" href="/assets/css/base.css" />
     <script>
       window.__PINGUIN_CONFIG__ = window.__PINGUIN_CONFIG__ || {
-        apiBaseUrl: '/api',
         tauthBaseUrl: 'http://localhost:8081',
         googleClientId: 'YOUR_GOOGLE_WEB_CLIENT_ID',
         landingUrl: '/index.html',
@@ -36,12 +35,9 @@
     ></mpr-header>
     <main>
       <section class="anchor-section hero" x-data="landingAuthPanel()" x-init="init()">
-        <p class="eyebrow" id="features">Trusted delivery infrastructure</p>
-        <h1>Deliver email and SMS notifications with confidence</h1>
-        <p>
-          Authenticate with Google Identity, preview schedules, and manage queued notifications from a single
-          workspace.
-        </p>
+        <p class="eyebrow" id="features" x-text="STRINGS.landing.eyebrow"></p>
+        <h1 x-text="STRINGS.landing.headline"></h1>
+        <p x-text="STRINGS.landing.subheadline"></p>
         <div class="panel" aria-live="polite">
           <p class="notice" x-text="notice"></p>
           <div class="google-button-host" x-ref="googleButton" data-testid="google-button-host"></div>

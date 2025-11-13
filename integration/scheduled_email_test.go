@@ -68,13 +68,7 @@ func TestScheduledEmailDispatchesAfterWorkerRuns(t *testing.T) {
 		t.Fatalf("expected dispatch at or after scheduled time; scheduled=%v dispatch=%v", scheduledFor, sentAt)
 	}
 
-	finalResponse, statusErr := notificationService.GetNotificationStatus(context.Background(), response.NotificationID)
-	if statusErr != nil {
-		t.Fatalf("status retrieval error: %v", statusErr)
-	}
-	if finalResponse.Status != model.StatusSent {
-		t.Fatalf("expected status sent, got %s", finalResponse.Status)
-	}
+	finalResponse := waitForNotificationStatus(t, notificationService, response.NotificationID, model.StatusSent, 5*time.Second)
 	if finalResponse.RetryCount != 1 {
 		t.Fatalf("expected retry count 1, got %d", finalResponse.RetryCount)
 	}
@@ -124,5 +118,29 @@ func (sender *recordingEmailSender) WaitForSend(timeout time.Duration) (time.Tim
 		return timestamp, true
 	case <-time.After(timeout):
 		return time.Time{}, false
+	}
+}
+
+func waitForNotificationStatus(t *testing.T, notificationService service.NotificationService, notificationID string, expectedStatus model.NotificationStatus, timeout time.Duration) model.NotificationResponse {
+	t.Helper()
+
+	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	var lastResponse model.NotificationResponse
+	for {
+		response, err := notificationService.GetNotificationStatus(context.Background(), notificationID)
+		if err != nil {
+			t.Fatalf("status retrieval error: %v", err)
+		}
+		lastResponse = response
+		if response.Status == expectedStatus {
+			return response
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected status %s within %s; last observed status %s", expectedStatus, timeout, lastResponse.Status)
+		}
+		<-ticker.C
 	}
 }
