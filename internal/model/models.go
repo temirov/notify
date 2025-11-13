@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -33,6 +34,8 @@ const (
 	StatusUnknown   NotificationStatus = "unknown"
 	StatusFailed    NotificationStatus = "failed" // legacy value kept for previously persisted rows
 )
+
+var ErrNotificationNotFound = errors.New("notification not found")
 
 func CanonicalStatus(status NotificationStatus) NotificationStatus {
 	switch status {
@@ -236,9 +239,9 @@ func MustGetNotificationByID(ctx context.Context, db *gorm.DB, notificationID st
 	n, err := GetNotificationByID(ctx, db, notificationID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("notification not found: %s", notificationID)
+			return nil, fmt.Errorf("%w: %s", ErrNotificationNotFound, notificationID)
 		}
-		return nil, err
+		return nil, fmt.Errorf("get_notification_by_id: %w", err)
 	}
 	return n, nil
 }
