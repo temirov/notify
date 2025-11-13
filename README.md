@@ -383,6 +383,23 @@ All endpoints emit structured JSON errors (`401` for auth failures, `400` for in
 - Authentication state is broadcast across tabs via TAuth’s `BroadcastChannel("auth")`, so signing out in one tab logs out the others automatically.
 - Handy for local testing: run the Go server with the HTTP config set, then visit `http://localhost:<http_port>/web/index.html` to exercise sign-in, reschedule, and cancellation flows without needing an external client.
 
+### Front-End Tests (Playwright)
+
+Install the Node tooling once:
+
+```bash
+npm install
+npx playwright install --with-deps
+```
+
+Then execute the browser smoke tests (landing auth CTA, dashboard cancel/reschedule flows) with:
+
+```bash
+npm test
+```
+
+The Playwright harness spins up a lightweight local server that mocks the `/api/notifications` + TAuth endpoints so the UI can be exercised without external services.
+
 ---
 
 ## Logging and Debugging
