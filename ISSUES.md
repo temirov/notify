@@ -65,6 +65,12 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
     - README + `.env` expect the static bundle on `http://localhost:4173`, and CORS defaults now reference that origin.
     - Need to update compose to expose ghttp on 4173 (container 8080), ensure the HTTP server keeps port 8080, and document the change in CHANGELOG + sample env instructions if needed.
     - Updated `docker-compose.yaml` to publish ghttp on 4173, aligned `.env.tauth.example`/README guidance so TAuth CORS allows the same origin, and recorded the fix in the changelog.
+- [x] [BF-304] CORS defaults allow credentialed requests from any origin.
+  Notes:
+    - When `HTTP_ALLOWED_ORIGINS` is empty, `buildCORS` sets `AllowAllOrigins=true` and `AllowCredentials=true`, so Gin echoes any `Origin` header while still sending cookies.
+    - This effectively enables CSRF for all HTTP endpoints because any site can issue authenticated requests if a user has a TAuth session.
+    - Need to either enforce an explicit allowlist or disable credentials when falling back to AllowAllOrigins (per requirement, disable credentials in the fallback).
+    - Updated `buildCORS` to disable credentials for the fallback path and added unit tests verifying default vs allowlist behaviour.
 
 ## Maintenance (400–499)
 
