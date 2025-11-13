@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/temirov/pinguin/internal/model"
 	"github.com/temirov/pinguin/internal/service"
 	sessionvalidator "github.com/tyemirov/tauth/pkg/sessionvalidator"
@@ -115,6 +116,54 @@ func TestCancelNotificationErrorMapping(t *testing.T) {
 				t.Fatalf("expected %d, got %d", testCase.expectedCode, recorder.Code)
 			}
 		})
+	}
+}
+
+func TestBuildCORSDefaultDisablesCredentials(t *testing.T) {
+	t.Helper()
+
+	engine := gin.New()
+	engine.Use(buildCORS(nil))
+	engine.GET("/ping", func(ctx *gin.Context) {
+		ctx.String(http.StatusOK, "ok")
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	request.Header.Set("Origin", "https://evil.example")
+
+	engine.ServeHTTP(recorder, request)
+
+	if got := recorder.Header().Get("Access-Control-Allow-Credentials"); got != "" {
+		t.Fatalf("expected no credentials header, got %q", got)
+	}
+	if origin := recorder.Header().Get("Access-Control-Allow-Origin"); origin != "*" {
+		t.Fatalf("expected wildcard allow origin, got %q", origin)
+	}
+}
+
+func TestBuildCORSEmitsCredentialsForExplicitAllowList(t *testing.T) {
+	t.Helper()
+
+	const allowedOrigin = "https://app.example"
+
+	engine := gin.New()
+	engine.Use(buildCORS([]string{allowedOrigin}))
+	engine.GET("/ping", func(ctx *gin.Context) {
+		ctx.String(http.StatusOK, "ok")
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	request.Header.Set("Origin", allowedOrigin)
+
+	engine.ServeHTTP(recorder, request)
+
+	if got := recorder.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+		t.Fatalf("expected credentials header, got %q", got)
+	}
+	if origin := recorder.Header().Get("Access-Control-Allow-Origin"); origin != allowedOrigin {
+		t.Fatalf("expected allow origin %q, got %q", allowedOrigin, origin)
 	}
 }
 
