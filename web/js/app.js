@@ -49,8 +49,31 @@ function createLandingAuthPanel(controller) {
     STRINGS,
     notice: STRINGS.auth.ready,
     isBusy: false,
+    stopStatusWatcher: null,
     init() {
       this.notice = STRINGS.auth.ready;
+      this.stopStatusWatcher = controller.onStatusChange((status) => {
+        switch (status) {
+          case 'hydrating':
+            this.isBusy = true;
+            this.notice = STRINGS.auth.signingIn;
+            break;
+          case 'ready':
+            this.isBusy = false;
+            if (!window.Alpine.store('auth').isAuthenticated) {
+              this.notice = STRINGS.auth.ready;
+            } else {
+              this.notice = '';
+            }
+            break;
+          case 'error':
+            this.isBusy = false;
+            this.notice = STRINGS.auth.failed;
+            break;
+          default:
+            break;
+        }
+      });
     },
     async handleSignInClick() {
       if (this.isBusy) {
@@ -68,6 +91,11 @@ function createLandingAuthPanel(controller) {
         this.isBusy = false;
       }
     },
+    $cleanup() {
+      if (typeof this.stopStatusWatcher === 'function') {
+        this.stopStatusWatcher();
+      }
+    },
   };
 }
 
@@ -75,6 +103,16 @@ function createDashboardShell(controller) {
   return {
     strings: STRINGS.dashboard,
     actions: STRINGS.actions,
+    init() {
+      this.$watch(
+        () => window.Alpine.store('auth').isAuthenticated,
+        (isAuthenticated) => {
+          if (!isAuthenticated) {
+            window.location.assign(RUNTIME_CONFIG.landingUrl);
+          }
+        },
+      );
+    },
     refreshNotifications() {
       dispatchRefresh();
     },
@@ -115,6 +153,7 @@ function bootstrapPage(controller) {
 function createAuthController(config) {
   let activeNonceToken = '';
   let lastCallbacks = { onAuthenticated: undefined, onUnauthenticated: undefined };
+  const statusListeners = new Set();
 
   const applyProfile = (profile) => {
     const store = Alpine.store('auth');
@@ -132,20 +171,48 @@ function createAuthController(config) {
     }
   };
 
-  async function hydrate(callbacks = {}) {
-    lastCallbacks = callbacks;
-    await waitFor(() => typeof window.initAuthClient === 'function');
-    return window.initAuthClient({
-      baseUrl: config.tauthBaseUrl,
-      onAuthenticated(profile) {
-        applyProfile(profile);
-        invokeCallback('onAuthenticated', profile);
-      },
-      onUnauthenticated() {
+  const setStatus = (status) => {
+    statusListeners.forEach((listener) => listener(status));
+  };
+
+  const sessionChannel =
+    typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('auth') : null;
+  if (sessionChannel) {
+    sessionChannel.addEventListener('message', (event) => {
+      if (event.data === 'logged_out') {
         applyProfile(null);
         invokeCallback('onUnauthenticated');
-      },
+      }
+      if (event.data === 'refreshed') {
+        hydrate(lastCallbacks).catch((error) => {
+          console.error('hydrate after refresh failed', error);
+        });
+      }
     });
+  }
+
+  async function hydrate(callbacks = {}) {
+    lastCallbacks = callbacks;
+    setStatus('hydrating');
+    try {
+      await waitFor(() => typeof window.initAuthClient === 'function');
+      const result = await window.initAuthClient({
+        baseUrl: config.tauthBaseUrl,
+        onAuthenticated(profile) {
+          applyProfile(profile);
+          invokeCallback('onAuthenticated', profile);
+        },
+        onUnauthenticated() {
+          applyProfile(null);
+          invokeCallback('onUnauthenticated');
+        },
+      });
+      setStatus('ready');
+      return result;
+    } catch (error) {
+      setStatus('error');
+      throw error;
+    }
   }
 
   async function prepareGoogleButton(targetElement) {
@@ -197,7 +264,12 @@ function createAuthController(config) {
     applyProfile(null);
   }
 
-  return { hydrate, prepareGoogleButton, logout };
+  function onStatusChange(listener) {
+    statusListeners.add(listener);
+    return () => statusListeners.delete(listener);
+  }
+
+  return { hydrate, prepareGoogleButton, logout, onStatusChange };
 }
 
 function waitFor(checkFn, timeout = 12000) {

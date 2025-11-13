@@ -380,6 +380,7 @@ All endpoints emit structured JSON errors (`401` for auth failures, `400` for in
 - Static assets live under `/web` and are served directly by the HTTP server (see `HTTP_STATIC_ROOT`). `index.html` provides the marketing + Google Sign-In landing experience, and `dashboard.html` renders the authenticated notifications table.
 - The UI follows AGENTS.md: Alpine components per section, mpr-ui header/footer, DOM-scoped events (`notifications:*`) for toasts + table refreshes, and all strings centralized in `js/constants.js`.
 - `js/app.js` bootstraps Alpine, hydrates the TAuth session (`auth-client.js`), and guards routes. Components interact with the new `/api/notifications` endpoints via the shared `apiClient`.
+- Authentication state is broadcast across tabs via TAuth’s `BroadcastChannel("auth")`, so signing out in one tab logs out the others automatically.
 - Handy for local testing: run the Go server with the HTTP config set, then visit `http://localhost:<http_port>/web/index.html` to exercise sign-in, reschedule, and cancellation flows without needing an external client.
 
 ---
