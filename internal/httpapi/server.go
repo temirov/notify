@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -65,16 +66,11 @@ func NewServer(cfg Config) (*Server, error) {
 	engine := gin.New()
 	engine.Use(gin.Recovery())
 	engine.Use(requestLogger(cfg.Logger))
+	engine.Use(buildCORS(cfg.AllowedOrigins))
 
 	engine.GET("/healthz", func(contextGin *gin.Context) {
 		contextGin.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
-
-	if cfg.StaticRoot != "" {
-		engine.StaticFS("/", gin.Dir(filepath.Clean(cfg.StaticRoot), false))
-	}
-
-	engine.Use(buildCORS(cfg.AllowedOrigins))
 
 	protected := engine.Group("/api")
 	protected.Use(sessionMiddleware(cfg.SessionValidator))
@@ -83,6 +79,35 @@ func NewServer(cfg Config) (*Server, error) {
 	protected.GET("/notifications", handler.listNotifications)
 	protected.PATCH("/notifications/:id/schedule", handler.rescheduleNotification)
 	protected.POST("/notifications/:id/cancel", handler.cancelNotification)
+
+	if cfg.StaticRoot != "" {
+		staticDir := filepath.Clean(cfg.StaticRoot)
+		engine.NoRoute(func(contextGin *gin.Context) {
+			requestPath := contextGin.Request.URL.Path
+			if requestPath == "" || requestPath == "/" {
+				requestPath = "/index.html"
+			}
+			contextGin.Request.URL.Path = requestPath
+			contextGin.Request.URL.RawPath = requestPath
+			cleaned := filepath.Clean(requestPath)
+			cleaned = strings.TrimPrefix(cleaned, string(filepath.Separator))
+			fullPath := filepath.Join(staticDir, cleaned)
+			if !strings.HasPrefix(fullPath, staticDir) {
+				contextGin.Status(http.StatusNotFound)
+				return
+			}
+			info, err := os.Stat(fullPath)
+			if err != nil {
+				contextGin.Status(http.StatusNotFound)
+				return
+			}
+			if info.IsDir() {
+				contextGin.Status(http.StatusNotFound)
+				return
+			}
+			http.ServeFile(contextGin.Writer, contextGin.Request, fullPath)
+		})
+	}
 
 	httpServer := &http.Server{
 		Addr:              cfg.ListenAddr,

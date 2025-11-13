@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -116,6 +118,36 @@ func TestCancelNotificationErrorMapping(t *testing.T) {
 				t.Fatalf("expected %d, got %d", testCase.expectedCode, recorder.Code)
 			}
 		})
+	}
+}
+
+func TestNewServerSupportsStaticRootAfterAPIRoutes(t *testing.T) {
+	t.Helper()
+
+	tempDir := t.TempDir()
+	assetPath := filepath.Join(tempDir, "app.js")
+	if writeErr := os.WriteFile(assetPath, []byte("console.log('ok');"), 0o644); writeErr != nil {
+		t.Fatalf("failed to write static file: %v", writeErr)
+	}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+	server, err := NewServer(Config{
+		ListenAddr:          ":0",
+		StaticRoot:          tempDir,
+		NotificationService: &stubNotificationService{},
+		SessionValidator:    &stubValidator{},
+		Logger:              logger,
+	})
+	if err != nil {
+		t.Fatalf("server init error: %v", err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/app.js", nil)
+
+	server.httpServer.Handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 when serving static content, got %d", recorder.Code)
 	}
 }
 
