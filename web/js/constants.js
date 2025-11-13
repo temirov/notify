@@ -36,6 +36,12 @@ export const STRINGS = Object.freeze({
     emptyState: "No notifications yet. Start by sending one via the CLI or gRPC client.",
     scheduleDialogTitle: "Reschedule notification",
     scheduleDialogDescription: "Select a new delivery time. Notifications can only be edited while queued.",
+    scheduleSuccess: "Delivery time updated",
+    cancelSuccess: "Notification cancelled",
+    cancelConfirm: "Cancel this queued notification?",
+    cancelError: "Unable to cancel notification.",
+    rescheduleError: "Unable to reschedule notification.",
+    loadError: "Unable to load notifications.",
   },
   auth: {
     signingIn: "Preparing Google Sign-In…",

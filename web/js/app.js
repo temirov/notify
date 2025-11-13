@@ -3,6 +3,8 @@ import Alpine from 'https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/module.esm
 import { RUNTIME_CONFIG, STRINGS } from './constants.js';
 import { createApiClient } from './core/apiClient.js';
 import { createNotificationsTable } from './ui/notificationsTable.js';
+import { dispatchRefresh } from './core/events.js';
+import { createToastCenter } from './ui/toastCenter.js';
 
 window.Alpine = Alpine;
 
@@ -17,6 +19,7 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('notificationsTable', () =>
     createNotificationsTable({ apiClient, strings: STRINGS.dashboard }),
   );
+  Alpine.data('toastCenter', () => createToastCenter());
 });
 
 Alpine.start();
@@ -71,8 +74,9 @@ function createLandingAuthPanel(controller) {
 function createDashboardShell(controller) {
   return {
     strings: STRINGS.dashboard,
+    actions: STRINGS.actions,
     refreshNotifications() {
-      document.dispatchEvent(new CustomEvent('notifications:refresh'));
+      dispatchRefresh();
     },
     async handleLogout() {
       await controller.logout();

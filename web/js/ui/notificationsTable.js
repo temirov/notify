@@ -1,5 +1,6 @@
 // @ts-check
 import { STATUS_LABELS, STATUS_OPTIONS } from '../constants.js';
+import { DOM_EVENTS, dispatchToast, listen } from '../core/events.js';
 
 /** @typedef {import('../types.d.js').NotificationItem} NotificationItem */
 
@@ -30,7 +31,7 @@ const inputFormatter = {
 };
 
 /**
- * @param {{ apiClient: ReturnType<typeof import('../core/apiClient.js').createApiClient> }} options
+ * @param {{ apiClient: ReturnType<typeof import('../core/apiClient.js').createApiClient>, strings: typeof import('../constants.js').STRINGS.dashboard }} options
  */
 export function createNotificationsTable(options) {
   const { apiClient } = options;
@@ -47,6 +48,7 @@ export function createNotificationsTable(options) {
       id: '',
       scheduledTime: '',
     },
+    stopListening: null,
     STATUS_OPTIONS,
     init() {
       this.refreshIfAuthenticated();
@@ -60,7 +62,7 @@ export function createNotificationsTable(options) {
           }
         },
       );
-      document.addEventListener('notifications:refresh', () => {
+      this.stopListening = listen(DOM_EVENTS.refresh, () => {
         if (authStore().isAuthenticated) {
           this.loadNotifications();
         }
@@ -76,7 +78,8 @@ export function createNotificationsTable(options) {
         const statuses = this.statusFilter === 'all' ? [] : [this.statusFilter];
         this.notifications = await apiClient.listNotifications(statuses);
       } catch (error) {
-        this.errorMessage = (error && error.message) || 'Unable to load notifications.';
+        this.errorMessage = this.strings.loadError;
+        dispatchToast({ variant: 'error', message: this.errorMessage });
       } finally {
         this.isLoading = false;
       }
@@ -119,29 +122,42 @@ export function createNotificationsTable(options) {
       event?.preventDefault();
       const isoValue = inputFormatter.toIso(this.scheduleForm.scheduledTime);
       if (!isoValue) {
-        this.errorMessage = 'Please provide a valid date/time in the future.';
+        this.errorMessage = this.strings.rescheduleError;
+        dispatchToast({ variant: 'error', message: this.errorMessage });
         return;
       }
       try {
         await apiClient.rescheduleNotification(this.scheduleForm.id, isoValue);
         await this.loadNotifications();
+        dispatchToast({ variant: 'success', message: this.strings.scheduleSuccess });
         this.closeScheduleDialog();
       } catch (error) {
-        this.errorMessage = (error && error.message) || 'Unable to reschedule notification.';
+        this.errorMessage = this.strings.rescheduleError;
+        dispatchToast({ variant: 'error', message: this.errorMessage });
       }
     },
     async cancelNotification(notificationId) {
       if (!authStore().isAuthenticated) {
         return;
       }
+      if (!window.confirm(this.strings.cancelConfirm)) {
+        return;
+      }
       this.isLoading = true;
       try {
         await apiClient.cancelNotification(notificationId);
         await this.loadNotifications();
+        dispatchToast({ variant: 'success', message: this.strings.cancelSuccess });
       } catch (error) {
-        this.errorMessage = (error && error.message) || 'Unable to cancel notification.';
+        this.errorMessage = this.strings.cancelError;
+        dispatchToast({ variant: 'error', message: this.errorMessage });
       } finally {
         this.isLoading = false;
+      }
+    },
+    $cleanup() {
+      if (typeof this.stopListening === 'function') {
+        this.stopListening();
       }
     },
   };
