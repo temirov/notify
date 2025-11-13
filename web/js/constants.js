@@ -11,8 +11,23 @@ const normalizeUrl = (value, fallback) => {
   return value.trim().replace(/\/$/, "") || fallback;
 };
 
+const deriveDefaultApiBaseUrl = () => {
+  try {
+    const { protocol, hostname, port } = window.location;
+    if (port === "4173") {
+      return `${protocol}//${hostname}:8080/api`;
+    }
+    if (port && port.length > 0) {
+      return `${protocol}//${hostname}:${port}/api`;
+    }
+    return `${protocol}//${hostname}/api`;
+  } catch {
+    return "/api";
+  }
+};
+
 export const RUNTIME_CONFIG = Object.freeze({
-  apiBaseUrl: normalizeUrl(rawConfig.apiBaseUrl, "/api"),
+  apiBaseUrl: normalizeUrl(rawConfig.apiBaseUrl, deriveDefaultApiBaseUrl()),
   tauthBaseUrl: normalizeUrl(rawConfig.tauthBaseUrl, "http://localhost:8081"),
   googleClientId: String(rawConfig.googleClientId || "YOUR_GOOGLE_WEB_CLIENT_ID"),
   landingUrl: String(rawConfig.landingUrl || "/index.html"),
