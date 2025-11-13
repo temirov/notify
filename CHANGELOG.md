@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Fixed HTTP server startup by registering static assets after `/api` routes, eliminating the Gin catch-all panic when `HTTP_STATIC_ROOT` is configured (BF-306).
 - Disabled Playwright’s per-test parallelism so the shared mock dev server state is not mutated concurrently, stabilizing dashboard smoke tests (BF-305).
 - Hardened HTTP CORS defaults by disabling credentialed responses whenever `HTTP_ALLOWED_ORIGINS` is empty, preventing cross-site requests from reusing TAuth cookies (BF-304).
 - Added a “Docker quickstart” section to README so operators can boot the full orchestration (Pinguin + TAuth + ghttp) with timed commands on the documented ports (IM-200).
