@@ -199,6 +199,7 @@ Open `http://localhost:4173` in your browser for the landing/dashboard UI. The H
    ```
 
    - `.env.pinguin` configures the gRPC/HTTP server plus SMTP/Twilio credentials.
+   - When serving the UI via ghttp, ensure `HTTP_ALLOWED_ORIGINS` includes `http://localhost:4173` so CORS accepts dashboard requests.
    - `.env.tauth` configures the Google OAuth client, signing key, and CORS settings for local development.
    - Keep `TAUTH_SIGNING_KEY` (Pinguin) identical to `APP_JWT_SIGNING_KEY` (TAuth) so cookie validation succeeds.
    - Ensure `HTTP_ALLOWED_ORIGINS` includes the UI host (`http://localhost:4173` when using the bundled ghttp server). Comma-separate additional origins if you front the UI elsewhere.
