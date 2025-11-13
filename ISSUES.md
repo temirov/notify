@@ -42,10 +42,11 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
   Notes:
     - docker-compose now serves `/web` via ghttp on port 4173, but `web/js/constants.js` still uses `apiBaseUrl: '/api'`, so calls are sent to the static host.
     - Need to inject the correct API origin (e.g., `http://localhost:8080/api` or the service hostname inside docker) via runtime config/env. (Fixed by deriving the default from `window.location` and swapping 4173→8080 when detected.)
-- [ ] [BF-301] CORS/README instructions reference the wrong origin.
+- [x] [BF-301] CORS/README instructions reference the wrong origin.
   Notes:
     - `.env.pinguin.example` keeps `HTTP_ALLOWED_ORIGINS=http://localhost:8080`, yet the UI now lives on `http://localhost:4173`, blocking compose-based testing.
     - README still tells users to browse `http://localhost:8080` for the landing page, leading to confusion and blank screens.
+    - Updated the sample env + README docker-compose guidance to default to the ghttp UI origin (`http://localhost:4173`) and documented how to keep `HTTP_ALLOWED_ORIGINS` aligned so browsers can call the API.
 
 ## Maintenance (400–499)
 
