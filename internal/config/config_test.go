@@ -1,6 +1,7 @@
 package config
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -19,6 +20,12 @@ func TestLoadConfig(t *testing.T) {
 		{key: "LOG_LEVEL", value: "INFO"},
 		{key: "MAX_RETRIES", value: "5"},
 		{key: "RETRY_INTERVAL_SEC", value: "4"},
+		{key: "HTTP_LISTEN_ADDR", value: ":8080"},
+		{key: "HTTP_STATIC_ROOT", value: "web"},
+		{key: "HTTP_ALLOWED_ORIGINS", value: "https://app.local,https://alt.local"},
+		{key: "TAUTH_SIGNING_KEY", value: "signing-key"},
+		{key: "TAUTH_ISSUER", value: "tauth"},
+		{key: "TAUTH_COOKIE_NAME", value: "custom_session"},
 		{key: "SMTP_USERNAME", value: "apikey"},
 		{key: "SMTP_PASSWORD", value: "secret"},
 		{key: "SMTP_HOST", value: "smtp.test"},
@@ -50,6 +57,12 @@ func TestLoadConfig(t *testing.T) {
 				LogLevel:             "INFO",
 				MaxRetries:           5,
 				RetryIntervalSec:     4,
+				HTTPListenAddr:       ":8080",
+				HTTPStaticRoot:       "web",
+				HTTPAllowedOrigins:   []string{"https://app.local", "https://alt.local"},
+				TAuthSigningKey:      "signing-key",
+				TAuthIssuer:          "tauth",
+				TAuthCookieName:      "custom_session",
 				SMTPUsername:         "apikey",
 				SMTPPassword:         "secret",
 				SMTPHost:             "smtp.test",
@@ -105,6 +118,12 @@ func TestLoadConfig(t *testing.T) {
 				LogLevel:             "INFO",
 				MaxRetries:           5,
 				RetryIntervalSec:     4,
+				HTTPListenAddr:       ":8080",
+				HTTPStaticRoot:       "web",
+				HTTPAllowedOrigins:   []string{"https://app.local", "https://alt.local"},
+				TAuthSigningKey:      "signing-key",
+				TAuthIssuer:          "tauth",
+				TAuthCookieName:      "custom_session",
 				SMTPUsername:         "apikey",
 				SMTPPassword:         "secret",
 				SMTPHost:             "smtp.test",
@@ -142,9 +161,7 @@ func TestLoadConfig(t *testing.T) {
 				t.Fatalf("load config error: %v", loadError)
 			}
 
-			if loadedConfig != testCase.expectedConfig {
-				t.Fatalf("unexpected config %+v", loadedConfig)
-			}
+			assertConfigEquals(t, loadedConfig, testCase.expectedConfig)
 
 			if testCase.assert != nil {
 				testCase.assert(t, loadedConfig)
@@ -157,5 +174,32 @@ func setEnvironment(t *testing.T, entries []envEntry) {
 	t.Helper()
 	for _, entry := range entries {
 		t.Setenv(entry.key, entry.value)
+	}
+}
+
+func assertConfigEquals(t *testing.T, actual Config, expected Config) {
+	t.Helper()
+
+	if actual.DatabasePath != expected.DatabasePath ||
+		actual.GRPCAuthToken != expected.GRPCAuthToken ||
+		actual.LogLevel != expected.LogLevel ||
+		actual.MaxRetries != expected.MaxRetries ||
+		actual.RetryIntervalSec != expected.RetryIntervalSec ||
+		actual.HTTPListenAddr != expected.HTTPListenAddr ||
+		actual.HTTPStaticRoot != expected.HTTPStaticRoot ||
+		actual.TAuthSigningKey != expected.TAuthSigningKey ||
+		actual.TAuthIssuer != expected.TAuthIssuer ||
+		actual.TAuthCookieName != expected.TAuthCookieName ||
+		actual.SMTPUsername != expected.SMTPUsername ||
+		actual.SMTPPassword != expected.SMTPPassword ||
+		actual.SMTPHost != expected.SMTPHost ||
+		actual.SMTPPort != expected.SMTPPort ||
+		actual.FromEmail != expected.FromEmail ||
+		actual.ConnectionTimeoutSec != expected.ConnectionTimeoutSec ||
+		actual.OperationTimeoutSec != expected.OperationTimeoutSec {
+		t.Fatalf("unexpected scalar configuration: %+v", actual)
+	}
+	if !reflect.DeepEqual(actual.HTTPAllowedOrigins, expected.HTTPAllowedOrigins) {
+		t.Fatalf("unexpected allowed origins: %+v", actual.HTTPAllowedOrigins)
 	}
 }
