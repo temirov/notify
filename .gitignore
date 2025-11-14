@@ -22,7 +22,9 @@ test-results/
 
 # env file
 .env
-.env.pinguin
+.env.*
+!.env.tauth.example
+!.env.pinguin.example
 .idea/
 bin/
 tools/

@@ -1,6 +1,6 @@
 services:
   ghttp:
-    image: ghcr.io/temirov/ghttp:latest
+    image: ghcr.io/tyemirov/ghttp:latest
     container_name: ghttp
     restart: unless-stopped
     volumes:
@@ -31,11 +31,9 @@ services:
     env_file:
       - .env.pinguin
     volumes:
-      - pinguin-data:/var/lib/pinguin
+      - pinguin-data:/app/data
       - ./web:/web:ro
-    environment:
-      DATABASE_PATH: /var/lib/pinguin/pinguin.db
-      HTTP_STATIC_ROOT: /web
+
 
 volumes:
   pinguin-data:
