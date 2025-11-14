@@ -41,6 +41,7 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
     - README explains compose services but lacks a cohesive "start the stack" section.
     - Provide a dedicated quickstart outlining env file prep, `docker compose up`, and URLs (API vs UI) so newcomers can boot the full orchestration confidently.
     - Added a docker quickstart section (env copies, timed compose commands, port overview) plus changelog note.
+- [ ] [IM-201] Only allow admins to log in through web interface. add ADMINS env var and make it a comma separated list, e.g. ADMINS=temirov@gmail.com,fivedoteight@gmail.com 
 
 ## BugFixes (300–399)
 
