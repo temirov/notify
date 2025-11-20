@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- Fixed HTTP server startup by registering static assets after `/api` routes, eliminating the Gin catch-all panic when `HTTP_STATIC_ROOT` is configured (BF-306).
+- Disabled Playwright’s per-test parallelism so the shared mock dev server state is not mutated concurrently, stabilizing dashboard smoke tests (BF-305).
+- Hardened HTTP CORS defaults by disabling credentialed responses whenever `HTTP_ALLOWED_ORIGINS` is empty, preventing cross-site requests from reusing TAuth cookies (BF-304).
+- Added a “Docker quickstart” section to README so operators can boot the full orchestration (Pinguin + TAuth + ghttp) with timed commands on the documented ports (IM-200).
+- Corrected docker-compose so the ghttp static host binds to `http://localhost:4173` (matching docs/CORS defaults) and updated the TAuth sample `.env`/README instructions accordingly (BF-303).
+- Stabilized the scheduled email integration test by waiting for the persisted `sent` status so CI no longer flakes on BF-302.
+- Fixed the sample `HTTP_ALLOWED_ORIGINS` value and README docker-compose instructions so compose users open the UI on `http://localhost:4173` and the HTTP API accepts requests from that origin (BF-301).
 - Added GoDoc coverage for all client-facing packages (client, attachments, grpcapi, grpcutil, logging) so integrators can rely on `go doc` to understand how to embed the SDK.
 - Added a scheduling integration test backed by injectable senders to ensure emails queued with future timestamps are dispatched only after the background worker releases them.
 - Extracted the scheduling/retry worker into `pkg/scheduler`, wired the server through a repository/dispatcher bridge, and added unit tests so other binaries can reuse the persistence-agnostic scheduler.

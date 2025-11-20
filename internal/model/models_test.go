@@ -9,6 +9,31 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestNotificationListFiltersNormalizeStatuses(t *testing.T) {
+	t.Helper()
+
+	filters := NotificationListFilters{
+		Statuses: []NotificationStatus{
+			StatusQueued,
+			NotificationStatus("ignored"),
+			StatusFailed,
+			StatusCancelled,
+			StatusFailed,
+		},
+	}
+
+	normalized := filters.NormalizedStatuses()
+	expected := []NotificationStatus{StatusQueued, StatusErrored, StatusCancelled}
+	if len(normalized) != len(expected) {
+		t.Fatalf("expected %d statuses, got %d", len(expected), len(normalized))
+	}
+	for index, status := range normalized {
+		if status != expected[index] {
+			t.Fatalf("status mismatch at %d: want %s got %s", index, expected[index], status)
+		}
+	}
+}
+
 func TestNewNotificationConstructsQueuedRecord(t *testing.T) {
 	t.Helper()
 
