@@ -26,3 +26,7 @@ bin/
 tools/
 
 PLAN.md
+# Managed by gix gitignore workflow
+.env.*
+.DS_Store
+qodana.yaml
