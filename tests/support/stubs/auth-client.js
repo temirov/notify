@@ -33,6 +33,9 @@
   window.logout = async function logout() {
     const session = getSession();
     session.authenticated = false;
+    if (typeof window.__persistMockAuth === 'function') {
+      window.__persistMockAuth();
+    }
     emit('logged_out');
   };
 })();
