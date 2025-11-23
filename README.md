@@ -114,6 +114,8 @@ Pinguin is configured via environment variables. Create a `.env` file or export 
   Comma-separated list of administrator email addresses. Only these accounts can load the dashboard or call the HTTP API; all other sessions receive a `403` response even if they hold a valid TAuth cookie.
 - **TAUTH_BASE_URL:**  
   Base URL for your TAuth deployment (defaults to `http://localhost:8081`). The UI loads `auth-client.js` from this origin before initializing Google Sign-In.
+- **TAuth CORS allowlist:**  
+  When you serve the UI from a different origin (ghttp on `http://localhost:4173`, a CDN, etc.), TAuth must enable CORS and allow both the UI origin *and* `https://accounts.google.com`. Google Identity Services performs the nonce/login exchange from the `accounts.google.com` origin, so omitting it results in `auth.login.nonce_mismatch` errors. The sample `.env.tauth.example` includes `APP_CORS_ALLOWED_ORIGINS="http://localhost:4173,https://accounts.google.com"` for this reason—extend the list with any additional UI origins you deploy.
 - **Web authentication flow:**  
   The browser UI relies on `<mpr-header>` and `<mpr-login-button>` from the `mpr-ui` package. Both components expect a Google OAuth Web Client ID (`site-id`) plus the TAuth endpoints noted above. Update the attributes in `web/index.html` / `web/dashboard.html` when deploying to a new TAuth instance. See `docs/mprui-integration-guide.md` for the header wiring details and `docs/tauth-usage.md` for the TAuth helper/nonce contract.
 - **Google Identity Client ID:**  
