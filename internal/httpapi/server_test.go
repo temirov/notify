@@ -45,7 +45,6 @@ func TestSessionMiddlewareRejectsNonAdmins(t *testing.T) {
 		SessionValidator:    &stubValidator{email: "guest@example.com"},
 		Logger:              logger,
 		AdminEmails:         []string{"admin@example.com"},
-		TAuthBaseURL:        "http://localhost:8081",
 	})
 	if err != nil {
 		t.Fatalf("server init error: %v", err)
@@ -228,7 +227,6 @@ func TestNewServerSupportsStaticRootAfterAPIRoutes(t *testing.T) {
 		SessionValidator:    &stubValidator{},
 		Logger:              logger,
 		AdminEmails:         []string{"user@example.com"},
-		TAuthBaseURL:        "http://localhost:8081",
 	})
 	if err != nil {
 		t.Fatalf("server init error: %v", err)
@@ -301,7 +299,6 @@ func TestRuntimeConfigEndpointReturnsValues(t *testing.T) {
 		SessionValidator:    &stubValidator{},
 		Logger:              logger,
 		AdminEmails:         []string{"user@example.com"},
-		TAuthBaseURL:        "https://auth.example",
 	})
 	if err != nil {
 		t.Fatalf("server init error: %v", err)
@@ -315,14 +312,10 @@ func TestRuntimeConfigEndpointReturnsValues(t *testing.T) {
 		t.Fatalf("expected 200, got %d", recorder.Code)
 	}
 	var payload struct {
-		TAuthBaseURL string `json:"tauthBaseUrl"`
-		APIBaseURL   string `json:"apiBaseUrl"`
+		APIBaseURL string `json:"apiBaseUrl"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode error: %v", err)
-	}
-	if payload.TAuthBaseURL != "https://auth.example" {
-		t.Fatalf("unexpected tauth base %q", payload.TAuthBaseURL)
 	}
 	if payload.APIBaseURL != "http://example.com/api" {
 		t.Fatalf("unexpected api base %q", payload.APIBaseURL)
@@ -339,7 +332,6 @@ func newTestHTTPServer(t *testing.T, svc service.NotificationService, validator 
 		SessionValidator:    validator,
 		Logger:              logger,
 		AdminEmails:         []string{"user@example.com"},
-		TAuthBaseURL:        "http://localhost:8081",
 	})
 	if err != nil {
 		t.Fatalf("server init error: %v", err)

@@ -35,7 +35,6 @@ type Config struct {
 	StaticRoot           string
 	AllowedOrigins       []string
 	AdminEmails          []string
-	TAuthBaseURL         string
 	SessionValidator     SessionValidator
 	NotificationService  service.NotificationService
 	Logger               *slog.Logger
@@ -69,9 +68,6 @@ func NewServer(cfg Config) (*Server, error) {
 	if len(adminAllowlist) == 0 {
 		return nil, errors.New("httpapi: admin allowlist is required")
 	}
-	runtimeCfg := runtimeConfigPayload{
-		TAuthBaseURL: deriveTAuthBaseURL(cfg.TAuthBaseURL),
-	}
 
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
@@ -79,7 +75,7 @@ func NewServer(cfg Config) (*Server, error) {
 	engine.Use(requestLogger(cfg.Logger))
 	engine.Use(buildCORS(cfg.AllowedOrigins))
 
-	engine.GET("/runtime-config", serveRuntimeConfig(runtimeCfg))
+	engine.GET("/runtime-config", serveRuntimeConfig())
 	engine.GET("/healthz", func(contextGin *gin.Context) {
 		contextGin.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
@@ -331,14 +327,14 @@ func pickDuration(candidate time.Duration, fallback time.Duration) time.Duration
 }
 
 type runtimeConfigPayload struct {
-	TAuthBaseURL string `json:"tauthBaseUrl"`
-	APIBaseURL   string `json:"apiBaseUrl"`
+	APIBaseURL string `json:"apiBaseUrl"`
 }
 
-func serveRuntimeConfig(staticPayload runtimeConfigPayload) gin.HandlerFunc {
+func serveRuntimeConfig() gin.HandlerFunc {
 	return func(contextGin *gin.Context) {
-		payload := staticPayload
-		payload.APIBaseURL = buildAPIBaseURL(contextGin.Request)
+		payload := runtimeConfigPayload{
+			APIBaseURL: buildAPIBaseURL(contextGin.Request),
+		}
 		contextGin.JSON(http.StatusOK, payload)
 	}
 }
@@ -356,14 +352,6 @@ func normalizeEmailAllowlist(values []string) map[string]struct{} {
 		normalized[email] = struct{}{}
 	}
 	return normalized
-}
-
-func deriveTAuthBaseURL(raw string) string {
-	candidate := strings.TrimSpace(raw)
-	if candidate == "" {
-		return "http://localhost:8081"
-	}
-	return candidate
 }
 
 func buildAPIBaseURL(request *http.Request) string {

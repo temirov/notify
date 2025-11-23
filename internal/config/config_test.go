@@ -64,8 +64,7 @@ func TestLoadConfig(t *testing.T) {
 				AdminEmails:          []string{"admin1@example.com", "admin2@example.com"},
 				TAuthSigningKey:      "signing-key",
 				TAuthIssuer:          "tauth",
-				TAuthCookieName:      "custom_session",
-				TAuthBaseURL:         "http://localhost:8081",
+			TAuthCookieName:      "custom_session",
 				SMTPUsername:         "apikey",
 				SMTPPassword:         "secret",
 				SMTPHost:             "smtp.test",
@@ -132,8 +131,7 @@ func TestLoadConfig(t *testing.T) {
 				HTTPAllowedOrigins:   []string{"https://app.local", "https://alt.local"},
 				TAuthSigningKey:      "signing-key",
 				TAuthIssuer:          "tauth",
-				TAuthCookieName:      "custom_session",
-				TAuthBaseURL:         "http://localhost:8081",
+			TAuthCookieName:      "custom_session",
 				SMTPUsername:         "apikey",
 				SMTPPassword:         "secret",
 				SMTPHost:             "smtp.test",
@@ -215,8 +213,7 @@ func assertConfigEquals(t *testing.T, actual Config, expected Config) {
 		actual.HTTPStaticRoot != expected.HTTPStaticRoot ||
 		actual.TAuthSigningKey != expected.TAuthSigningKey ||
 		actual.TAuthIssuer != expected.TAuthIssuer ||
-		actual.TAuthCookieName != expected.TAuthCookieName ||
-		actual.TAuthBaseURL != expected.TAuthBaseURL ||
+	actual.TAuthCookieName != expected.TAuthCookieName ||
 		actual.SMTPUsername != expected.SMTPUsername ||
 		actual.SMTPPassword != expected.SMTPPassword ||
 		actual.SMTPHost != expected.SMTPHost ||

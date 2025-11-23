@@ -23,7 +23,6 @@ type Config struct {
 	TAuthSigningKey string
 	TAuthIssuer     string
 	TAuthCookieName string
-	TAuthBaseURL    string
 
 	SMTPUsername string
 	SMTPPassword string
@@ -101,10 +100,6 @@ func LoadConfig() (Config, error) {
 	configuration.AdminEmails = parseCSV(adminListRaw)
 	if len(configuration.AdminEmails) == 0 {
 		return Config{}, fmt.Errorf("configuration errors: missing admin emails")
-	}
-	configuration.TAuthBaseURL = strings.TrimSpace(os.Getenv("TAUTH_BASE_URL"))
-	if configuration.TAuthBaseURL == "" {
-		configuration.TAuthBaseURL = "http://localhost:8081"
 	}
 
 	return configuration, nil

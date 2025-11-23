@@ -3,6 +3,7 @@
 /** @type {Window & typeof globalThis & { __PINGUIN_CONFIG__?: Record<string, unknown> }} */
 const runtimeWindow = window;
 const rawConfig = runtimeWindow.__PINGUIN_CONFIG__ ?? {};
+const tauthConfig = runtimeWindow.PINGUIN_TAUTH_CONFIG || {};
 
 const normalizeUrl = (value, fallback) => {
   if (!value || typeof value !== "string") {
@@ -60,8 +61,9 @@ const normalizeGoogleClientId = (value) => {
 
 export const RUNTIME_CONFIG = Object.freeze({
   apiBaseUrl: normalizeUrl(rawConfig.apiBaseUrl, deriveDefaultApiBaseUrl()),
-  tauthBaseUrl: normalizeUrl(rawConfig.tauthBaseUrl, "http://localhost:8081"),
-  googleClientId: normalizeGoogleClientId(rawConfig.googleClientId) || deriveGoogleClientId(),
+  tauthBaseUrl: normalizeUrl(rawConfig.tauthBaseUrl || tauthConfig.baseUrl, "http://localhost:8081"),
+  googleClientId:
+    normalizeGoogleClientId(rawConfig.googleClientId || tauthConfig.googleClientId) || deriveGoogleClientId(),
   landingUrl: String(rawConfig.landingUrl || "/index.html"),
   dashboardUrl: String(rawConfig.dashboardUrl || "/dashboard.html"),
 });
