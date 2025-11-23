@@ -14,14 +14,14 @@ test.describe('Landing page auth flow', () => {
   test('shows CTA and disables button during GIS prep', async ({ page }) => {
     await page.goto('/index.html');
     await expectHeaderGoogleButton(page);
-    const signInSurface = page.getByRole('button', { name: 'Continue to dashboard' });
+    const signInSurface = page.getByTestId('landing-cta');
     await expect(signInSurface).toBeVisible();
   });
 
   test('completes Google/TAuth handshake and redirects to dashboard', async ({ page }) => {
     await page.goto('/index.html');
     await expectHeaderGoogleButton(page);
-    const heroButton = page.getByRole('button', { name: 'Continue to dashboard' });
+    const heroButton = page.getByTestId('landing-cta');
     await heroButton.click();
     await expect(heroButton).toBeVisible();
     const googleExchange = page.waitForRequest(/\/auth\/google$/);

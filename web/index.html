@@ -36,6 +36,7 @@
             type="button"
             x-on:click="handleSignInClick()"
             :disabled="isBusy"
+            data-testid="landing-cta"
           >
             <span
               x-text="isBusy ? STRINGS.auth.signingIn : STRINGS.landing.ctaPrimary"

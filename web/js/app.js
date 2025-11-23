@@ -61,6 +61,10 @@ function applyHeaderAuthConfig(config) {
   headers.forEach((header) => {
     header.setAttribute('site-id', config.googleClientId);
     header.setAttribute('auth-config', serialized);
+    header.setAttribute('base-url', authConfig.baseUrl);
+    header.setAttribute('login-path', authConfig.loginPath);
+    header.setAttribute('logout-path', authConfig.logoutPath);
+    header.setAttribute('nonce-path', authConfig.noncePath);
   });
   const loginButtons = document.querySelectorAll('mpr-login-button');
   loginButtons.forEach((button) => {
@@ -113,23 +117,24 @@ function createLandingAuthPanel(controller) {
       if (this.isBusy) {
         return;
       }
-      const googleButton = document.querySelector(
-        'mpr-header [data-mpr-login="google-button"] button, mpr-header [data-mpr-login="google-button"] [role="button"]',
-      );
-      if (!googleButton) {
+      this.triggerHeaderSignin().catch((error) => {
+        console.error('cta_signin_failed', error);
         this.notice = STRINGS.auth.failed;
-        return;
-      }
+      });
+    },
+    async triggerHeaderSignin() {
       this.isBusy = true;
       this.notice = STRINGS.auth.signingIn;
-      googleButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      if (typeof googleButton.focus === 'function') {
-        googleButton.focus({ preventScroll: true });
-      }
-      googleButton.click();
-      setTimeout(() => {
+      try {
+        const button = await waitForHeaderGoogleButton();
+        button.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (typeof button.focus === 'function') {
+          button.focus({ preventScroll: true });
+        }
+        button.click();
+      } finally {
         this.isBusy = false;
-      }, 600);
+      }
     },
     $cleanup() {
       if (typeof this.stopStatusWatcher === 'function') {
@@ -321,6 +326,20 @@ function waitFor(checkFn, timeout = 12000) {
     };
     tick();
   });
+}
+
+async function waitForHeaderGoogleButton(timeout = 15000) {
+  const selector = 'mpr-header [data-mpr-login="google-button"][data-mpr-google-ready="true"] button,' +
+    ' mpr-header [data-mpr-login="google-button"][data-mpr-google-ready="true"] [role="button"]';
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    const button = document.querySelector(selector);
+    if (button) {
+      return button;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error('google_button_not_ready');
 }
 
 function ensureMprUiLoaded() {
