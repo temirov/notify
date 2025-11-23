@@ -8,7 +8,16 @@ const PORT = process.env.PLAYWRIGHT_PORT ? Number(process.env.PLAYWRIGHT_PORT) :
 const WEB_ROOT = path.resolve(__dirname, '../../web');
 const AUTH_CLIENT_PATH = path.resolve(__dirname, './stubs/auth-client.js');
 
-let notifications = defaultNotifications();
+let serverState = createDefaultState();
+
+function createDefaultState() {
+  return {
+    notifications: defaultNotifications(),
+    failList: false,
+    failReschedule: false,
+    failCancel: false,
+  };
+}
 
 function defaultNotifications() {
   const now = new Date();
@@ -26,6 +35,17 @@ function defaultNotifications() {
       retry_count: 0,
     },
   ];
+}
+
+function applyOverrides(payload) {
+  if (Array.isArray(payload.notifications) && payload.notifications.length > 0) {
+    serverState.notifications = payload.notifications;
+  } else {
+    serverState.notifications = defaultNotifications();
+  }
+  serverState.failList = Boolean(payload.failList);
+  serverState.failReschedule = Boolean(payload.failReschedule);
+  serverState.failCancel = Boolean(payload.failCancel);
 }
 
 function readJson(req) {
@@ -77,42 +97,54 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   if (req.method === 'POST' && url.pathname === '/testing/reset') {
     const body = await readJson(req);
-    notifications = Array.isArray(body.notifications) && body.notifications.length > 0
-      ? body.notifications
-      : defaultNotifications();
+    applyOverrides(body || {});
     sendJson(res, 204, null);
     return;
   }
 
   if (req.method === 'GET' && url.pathname === '/api/notifications') {
-    sendJson(res, 200, { notifications });
+    if (serverState.failList) {
+      sendJson(res, 500, { error: 'list_failed' });
+      return;
+    }
+    const statuses = url.searchParams.getAll('status').filter(Boolean);
+    const filtered = filterNotifications(serverState.notifications, statuses);
+    sendJson(res, 200, { notifications: filtered });
     return;
   }
 
   const scheduleMatch = url.pathname.match(/^\/api\/notifications\/([^/]+)\/schedule$/);
   if (scheduleMatch && req.method === 'PATCH') {
+    if (serverState.failReschedule) {
+      sendJson(res, 500, { error: 'reschedule_failed' });
+      return;
+    }
     const body = await readJson(req);
     const scheduled_time = body.scheduled_time || null;
-    notifications = notifications.map((item) => {
+    serverState.notifications = serverState.notifications.map((item) => {
       if (item.notification_id === scheduleMatch[1]) {
         return { ...item, scheduled_time, status: 'queued', updated_at: new Date().toISOString() };
       }
       return item;
     });
-    const updated = notifications.find((item) => item.notification_id === scheduleMatch[1]);
+    const updated = serverState.notifications.find((item) => item.notification_id === scheduleMatch[1]);
     sendJson(res, 200, updated || {});
     return;
   }
 
   const cancelMatch = url.pathname.match(/^\/api\/notifications\/([^/]+)\/cancel$/);
   if (cancelMatch && req.method === 'POST') {
-    notifications = notifications.map((item) => {
+    if (serverState.failCancel) {
+      sendJson(res, 500, { error: 'cancel_failed' });
+      return;
+    }
+    serverState.notifications = serverState.notifications.map((item) => {
       if (item.notification_id === cancelMatch[1]) {
         return { ...item, status: 'cancelled', updated_at: new Date().toISOString() };
       }
       return item;
     });
-    const updated = notifications.find((item) => item.notification_id === cancelMatch[1]);
+    const updated = serverState.notifications.find((item) => item.notification_id === cancelMatch[1]);
     sendJson(res, 200, updated || {});
     return;
   }
@@ -146,6 +178,17 @@ const server = http.createServer(async (req, res) => {
   const filePath = path.join(WEB_ROOT, safePath);
   serveStatic(filePath, res);
 });
+
+function filterNotifications(source, statuses) {
+  if (!Array.isArray(source) || source.length === 0) {
+    return [];
+  }
+  if (!statuses || statuses.length === 0) {
+    return source;
+  }
+  const wanted = new Set(statuses.map((value) => String(value).toLowerCase()));
+  return source.filter((item) => wanted.has(String(item.status).toLowerCase()));
+}
 
 server.listen(PORT, HOST, () => {
   console.log(`Playwright test server listening on http://${HOST}:${PORT}`);
