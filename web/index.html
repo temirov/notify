@@ -9,6 +9,8 @@
       href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css"
     />
     <link rel="stylesheet" href="/assets/css/base.css" />
+    <script defer src="/js/tauth-config.js"></script>
+    <script defer src="/js/tauth-config-apply.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body data-page="landing">
@@ -17,12 +19,9 @@
       brand-href="/"
       nav-links='[{"label":"Docs","href":"#features"},{"label":"Status","href":"#status"}]'
       theme-config='{"initialMode":"light"}'
-      site-id="991677581607-r0dj8q6irjagipali0jpca7nfp8sfj9r.apps.googleusercontent.com"
-      base-url="http://localhost:8081"
       login-path="/auth/google"
       logout-path="/auth/logout"
       nonce-path="/auth/nonce"
-      auth-config='{"baseUrl":"http://localhost:8081","loginPath":"/auth/google","logoutPath":"/auth/logout","noncePath":"/auth/nonce","googleClientId":"991677581607-r0dj8q6irjagipali0jpca7nfp8sfj9r.apps.googleusercontent.com"}'
     ></mpr-header>
     <main>
       <section class="anchor-section hero" x-data="landingAuthPanel()" x-init="init()">

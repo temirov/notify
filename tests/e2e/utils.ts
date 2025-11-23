@@ -66,6 +66,12 @@ export async function configureRuntime(page: Page, options: { authenticated: boo
     },
     { base: baseUrl, authenticated: options.authenticated },
   );
+  await page.addInitScript(({ base }) => {
+    window.PINGUIN_TAUTH_CONFIG = {
+      baseUrl: base,
+      googleClientId: 'playwright-client',
+    };
+  }, { base: baseUrl });
 }
 
 export async function stubExternalAssets(page: Page) {

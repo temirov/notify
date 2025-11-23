@@ -13,8 +13,6 @@ const sessionBridge = createSessionBridge(RUNTIME_CONFIG);
 
 Alpine.store('auth', createAuthStore());
 
-applyHeaderAuthConfig(RUNTIME_CONFIG);
-
 Alpine.data('landingAuthPanel', () => createLandingAuthPanel(sessionBridge));
 Alpine.data('dashboardShell', () => createDashboardShell(sessionBridge));
 Alpine.data('notificationsTable', () =>
@@ -51,38 +49,6 @@ function createAuthStore() {
       this.profile = null;
       this.isAuthenticated = false;
     },
-  };
-}
-
-function applyHeaderAuthConfig(config) {
-  const authConfig = buildAuthConfig(config);
-  const serialized = JSON.stringify(authConfig);
-  const headers = document.querySelectorAll('mpr-header');
-  headers.forEach((header) => {
-    header.setAttribute('site-id', config.googleClientId);
-    header.setAttribute('auth-config', serialized);
-    header.setAttribute('base-url', authConfig.baseUrl);
-    header.setAttribute('login-path', authConfig.loginPath);
-    header.setAttribute('logout-path', authConfig.logoutPath);
-    header.setAttribute('nonce-path', authConfig.noncePath);
-  });
-  const loginButtons = document.querySelectorAll('mpr-login-button');
-  loginButtons.forEach((button) => {
-    button.setAttribute('site-id', config.googleClientId);
-    button.setAttribute('base-url', authConfig.baseUrl);
-    button.setAttribute('login-path', authConfig.loginPath);
-    button.setAttribute('logout-path', authConfig.logoutPath);
-    button.setAttribute('nonce-path', authConfig.noncePath);
-  });
-}
-
-function buildAuthConfig(config) {
-  return {
-    baseUrl: config.tauthBaseUrl,
-    loginPath: '/auth/google',
-    logoutPath: '/auth/logout',
-    noncePath: '/auth/nonce',
-    googleClientId: config.googleClientId,
   };
 }
 
