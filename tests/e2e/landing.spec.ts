@@ -34,4 +34,22 @@ test.describe('Landing page auth flow', () => {
     await navigation;
     await expect(page.getByTestId('notifications-table')).toBeVisible();
   });
+
+  test('mpr-header attributes mirror runtime TAuth base URL', async ({ page }) => {
+    await page.goto('/index.html');
+    const runtimeBase = await page.evaluate(() => (window as any).__PINGUIN_CONFIG__?.tauthBaseUrl || '');
+    const normalizedRuntimeBase = runtimeBase.replace(/\/$/, '');
+    if (normalizedRuntimeBase) {
+      await page.waitForFunction((expected) => {
+        const header = document.querySelector('mpr-header');
+        return header && header.getAttribute('base-url') === expected;
+      }, normalizedRuntimeBase);
+    }
+    const headerBase = (await page.locator('mpr-header').first().getAttribute('base-url')) || '';
+    if (normalizedRuntimeBase) {
+      expect(headerBase).toBe(normalizedRuntimeBase);
+    } else {
+      expect(headerBase).not.toBe('');
+    }
+  });
 });
