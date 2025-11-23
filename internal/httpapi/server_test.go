@@ -34,6 +34,31 @@ func TestListNotificationsRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestSessionMiddlewareRejectsNonAdmins(t *testing.T) {
+	t.Helper()
+
+	stubSvc := &stubNotificationService{}
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+	server, err := NewServer(Config{
+		ListenAddr:          ":0",
+		NotificationService: stubSvc,
+		SessionValidator:    &stubValidator{email: "guest@example.com"},
+		Logger:              logger,
+		AdminEmails:         []string{"admin@example.com"},
+	})
+	if err != nil {
+		t.Fatalf("server init error: %v", err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/notifications", nil)
+
+	server.httpServer.Handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin, got %d", recorder.Code)
+	}
+}
+
 func TestListNotificationsReturnsData(t *testing.T) {
 	t.Helper()
 
@@ -201,6 +226,7 @@ func TestNewServerSupportsStaticRootAfterAPIRoutes(t *testing.T) {
 		NotificationService: &stubNotificationService{},
 		SessionValidator:    &stubValidator{},
 		Logger:              logger,
+		AdminEmails:         []string{"user@example.com"},
 	})
 	if err != nil {
 		t.Fatalf("server init error: %v", err)
@@ -272,6 +298,7 @@ func newTestHTTPServer(t *testing.T, svc service.NotificationService, validator 
 		NotificationService: svc,
 		SessionValidator:    validator,
 		Logger:              logger,
+		AdminEmails:         []string{"user@example.com"},
 	})
 	if err != nil {
 		t.Fatalf("server init error: %v", err)
@@ -280,14 +307,19 @@ func newTestHTTPServer(t *testing.T, svc service.NotificationService, validator 
 }
 
 type stubValidator struct {
-	err error
+	err   error
+	email string
 }
 
 func (validator *stubValidator) ValidateRequest(_ *http.Request) (*sessionvalidator.Claims, error) {
 	if validator.err != nil {
 		return nil, validator.err
 	}
-	return &sessionvalidator.Claims{UserEmail: "user@example.com"}, nil
+	email := validator.email
+	if email == "" {
+		email = "user@example.com"
+	}
+	return &sessionvalidator.Claims{UserEmail: email}, nil
 }
 
 type stubNotificationService struct {

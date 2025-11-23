@@ -18,6 +18,7 @@ type Config struct {
 	HTTPListenAddr     string
 	HTTPStaticRoot     string
 	HTTPAllowedOrigins []string
+	AdminEmails        []string
 
 	TAuthSigningKey string
 	TAuthIssuer     string
@@ -92,6 +93,14 @@ func LoadConfig() (Config, error) {
 		configuration.TAuthCookieName = "app_session"
 	}
 	configuration.HTTPAllowedOrigins = parseCSV(os.Getenv("HTTP_ALLOWED_ORIGINS"))
+	adminListRaw := strings.TrimSpace(os.Getenv("ADMINS"))
+	if adminListRaw == "" {
+		return Config{}, fmt.Errorf("configuration errors: missing admin emails")
+	}
+	configuration.AdminEmails = parseCSV(adminListRaw)
+	if len(configuration.AdminEmails) == 0 {
+		return Config{}, fmt.Errorf("configuration errors: missing admin emails")
+	}
 
 	return configuration, nil
 }

@@ -354,6 +354,7 @@ func main() {
 		ListenAddr:          configuration.HTTPListenAddr,
 		StaticRoot:          configuration.HTTPStaticRoot,
 		AllowedOrigins:      configuration.HTTPAllowedOrigins,
+		AdminEmails:         configuration.AdminEmails,
 		SessionValidator:    sessionValidator,
 		NotificationService: notificationSvc,
 		Logger:              mainLogger,

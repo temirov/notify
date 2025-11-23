@@ -34,6 +34,7 @@ type Config struct {
 	ListenAddr           string
 	StaticRoot           string
 	AllowedOrigins       []string
+	AdminEmails          []string
 	SessionValidator     SessionValidator
 	NotificationService  service.NotificationService
 	Logger               *slog.Logger
@@ -46,6 +47,7 @@ type Server struct {
 	config     Config
 	httpServer *http.Server
 	logger     *slog.Logger
+	adminSet   map[string]struct{}
 }
 
 // NewServer wires Gin, middleware, and handlers for the HTTP API.
@@ -62,6 +64,10 @@ func NewServer(cfg Config) (*Server, error) {
 	if cfg.Logger == nil {
 		return nil, errors.New("httpapi: logger is required")
 	}
+	adminAllowlist := normalizeEmailAllowlist(cfg.AdminEmails)
+	if len(adminAllowlist) == 0 {
+		return nil, errors.New("httpapi: admin allowlist is required")
+	}
 
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
@@ -74,7 +80,7 @@ func NewServer(cfg Config) (*Server, error) {
 	})
 
 	protected := engine.Group("/api")
-	protected.Use(sessionMiddleware(cfg.SessionValidator))
+	protected.Use(sessionMiddleware(cfg.SessionValidator, adminAllowlist))
 
 	handler := newNotificationHandler(cfg.NotificationService, cfg.Logger)
 	protected.GET("/notifications", handler.listNotifications)
@@ -129,6 +135,7 @@ func NewServer(cfg Config) (*Server, error) {
 		config:     cfg,
 		httpServer: httpServer,
 		logger:     cfg.Logger,
+		adminSet:   adminAllowlist,
 	}, nil
 }
 
@@ -182,12 +189,19 @@ func buildCORS(allowedOrigins []string) gin.HandlerFunc {
 	return cors.New(cfg)
 }
 
-func sessionMiddleware(validator SessionValidator) gin.HandlerFunc {
+func sessionMiddleware(validator SessionValidator, adminAllowlist map[string]struct{}) gin.HandlerFunc {
 	return func(contextGin *gin.Context) {
 		claims, err := validator.ValidateRequest(contextGin.Request)
 		if err != nil {
 			contextGin.AbortWithStatus(http.StatusUnauthorized)
 			return
+		}
+		email := strings.ToLower(strings.TrimSpace(claims.GetUserEmail()))
+		if len(adminAllowlist) > 0 {
+			if _, ok := adminAllowlist[email]; !ok {
+				contextGin.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin access required"})
+				return
+			}
 		}
 		contextGin.Set(contextKeyClaims, claims)
 		contextGin.Next()
@@ -309,4 +323,19 @@ func pickDuration(candidate time.Duration, fallback time.Duration) time.Duration
 		return fallback
 	}
 	return candidate
+}
+
+func normalizeEmailAllowlist(values []string) map[string]struct{} {
+	if len(values) == 0 {
+		return nil
+	}
+	normalized := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		email := strings.TrimSpace(strings.ToLower(value))
+		if email == "" {
+			continue
+		}
+		normalized[email] = struct{}{}
+	}
+	return normalized
 }

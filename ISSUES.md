@@ -45,6 +45,7 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
     - Provide a dedicated quickstart outlining env file prep, `docker compose up`, and URLs (API vs UI) so newcomers can boot the full orchestration confidently.
     - Added a docker quickstart section (env copies, timed compose commands, port overview) plus changelog note.
 - [ ] [IM-201] Only allow admins to log in through web interface. add ADMINS env var and make it a comma separated list, e.g. ADMINS=temirov@gmail.com,fivedoteight@gmail.com 
+- [x] [IM-201] Only allow admins to log in through web interface. add ADMINS env var and make it a comma separated list, e.g. ADMINS=temirov@gmail.com,fivedoteight@gmail.com. (Config now requires `ADMINS`, HTTP middleware enforces the allowlist for API/dashboard traffic, `.env`/README document the new setting, and tests cover config parsing + non-admin rejection.)
 
 ## BugFixes (300–399)
 

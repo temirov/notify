@@ -36,6 +36,7 @@ func TestLoadConfig(t *testing.T) {
 		{key: "TWILIO_FROM_NUMBER", value: "+10000000000"},
 		{key: "CONNECTION_TIMEOUT_SEC", value: "3"},
 		{key: "OPERATION_TIMEOUT_SEC", value: "7"},
+		{key: "ADMINS", value: "admin1@example.com,admin2@example.com"},
 	}
 
 	testCases := []struct {
@@ -60,6 +61,7 @@ func TestLoadConfig(t *testing.T) {
 				HTTPListenAddr:       ":8080",
 				HTTPStaticRoot:       "web",
 				HTTPAllowedOrigins:   []string{"https://app.local", "https://alt.local"},
+				AdminEmails:          []string{"admin1@example.com", "admin2@example.com"},
 				TAuthSigningKey:      "signing-key",
 				TAuthIssuer:          "tauth",
 				TAuthCookieName:      "custom_session",
@@ -84,7 +86,13 @@ func TestLoadConfig(t *testing.T) {
 		{
 			name: "MissingVariable",
 			mutateEnv: func(t *testing.T) {
-				truncated := completeEnvironment[:len(completeEnvironment)-1]
+				var truncated []envEntry
+				for _, entry := range completeEnvironment {
+					if entry.key == "OPERATION_TIMEOUT_SEC" {
+						continue
+					}
+					truncated = append(truncated, entry)
+				}
 				setEnvironment(t, truncated)
 			},
 			expectError:    true,
@@ -131,6 +139,7 @@ func TestLoadConfig(t *testing.T) {
 				FromEmail:            "noreply@test",
 				ConnectionTimeoutSec: 3,
 				OperationTimeoutSec:  7,
+				AdminEmails:          []string{"admin1@example.com", "admin2@example.com"},
 			},
 			assert: func(t *testing.T, cfg Config) {
 				t.Helper()
@@ -138,6 +147,21 @@ func TestLoadConfig(t *testing.T) {
 					t.Fatalf("expected Twilio to be disabled")
 				}
 			},
+		},
+		{
+			name: "MissingAdmins",
+			mutateEnv: func(t *testing.T) {
+				var trimmed []envEntry
+				for _, entry := range completeEnvironment {
+					if entry.key == "ADMINS" {
+						continue
+					}
+					trimmed = append(trimmed, entry)
+				}
+				setEnvironment(t, trimmed)
+			},
+			expectError:    true,
+			errorSubstring: "missing admin emails",
 		},
 	}
 
@@ -201,5 +225,8 @@ func assertConfigEquals(t *testing.T, actual Config, expected Config) {
 	}
 	if !reflect.DeepEqual(actual.HTTPAllowedOrigins, expected.HTTPAllowedOrigins) {
 		t.Fatalf("unexpected allowed origins: %+v", actual.HTTPAllowedOrigins)
+	}
+	if !reflect.DeepEqual(actual.AdminEmails, expected.AdminEmails) {
+		t.Fatalf("unexpected admin emails: %+v", actual.AdminEmails)
 	}
 }
