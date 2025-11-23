@@ -355,6 +355,7 @@ func main() {
 		StaticRoot:          configuration.HTTPStaticRoot,
 		AllowedOrigins:      configuration.HTTPAllowedOrigins,
 		AdminEmails:         configuration.AdminEmails,
+		TAuthBaseURL:        configuration.TAuthBaseURL,
 		SessionValidator:    sessionValidator,
 		NotificationService: notificationSvc,
 		Logger:              mainLogger,

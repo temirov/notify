@@ -26,10 +26,42 @@ const deriveDefaultApiBaseUrl = () => {
   }
 };
 
+const PLACEHOLDER_GOOGLE_IDS = new Set([
+  "YOUR_GOOGLE_WEB_CLIENT_ID",
+  "YOUR_GOOGLE_CLIENT_ID",
+  "playwright-client",
+  "demo-google-client-id",
+]);
+
+const deriveGoogleClientId = () => {
+  try {
+    const host = document.querySelector("mpr-header");
+    const siteId =
+      host && typeof host.getAttribute === "function" ? host.getAttribute("site-id") : "";
+    if (siteId && siteId.trim()) {
+      return siteId.trim();
+    }
+  } catch {
+    // ignore
+  }
+  return "991677581607-r0dj8q6irjagipali0jpca7nfp8sfj9r.apps.googleusercontent.com";
+};
+
+const normalizeGoogleClientId = (value) => {
+  if (!value || typeof value !== "string") {
+    return "";
+  }
+  const trimmed = value.trim();
+  if (!trimmed || PLACEHOLDER_GOOGLE_IDS.has(trimmed)) {
+    return "";
+  }
+  return trimmed;
+};
+
 export const RUNTIME_CONFIG = Object.freeze({
   apiBaseUrl: normalizeUrl(rawConfig.apiBaseUrl, deriveDefaultApiBaseUrl()),
   tauthBaseUrl: normalizeUrl(rawConfig.tauthBaseUrl, "http://localhost:8081"),
-  googleClientId: String(rawConfig.googleClientId || "YOUR_GOOGLE_WEB_CLIENT_ID"),
+  googleClientId: normalizeGoogleClientId(rawConfig.googleClientId) || deriveGoogleClientId(),
   landingUrl: String(rawConfig.landingUrl || "/index.html"),
   dashboardUrl: String(rawConfig.dashboardUrl || "/dashboard.html"),
 });
@@ -41,7 +73,7 @@ export const STRINGS = Object.freeze({
     headline: "Deliver email and SMS notifications with confidence",
     subheadline:
       "Authenticate with Google Identity, preview schedules, and manage queued notifications from a single workspace.",
-    ctaPrimary: "Sign in with Google",
+    ctaPrimary: "Continue to dashboard",
     ctaSecondary: "Explore platform",
     securityCopy: "Your session stays protected by HttpOnly cookies minted by TAuth.",
   },

@@ -9,29 +9,35 @@ import { createToastCenter } from './ui/toastCenter.js';
 window.Alpine = Alpine;
 
 const apiClient = createApiClient(RUNTIME_CONFIG.apiBaseUrl);
-const authController = createAuthController(RUNTIME_CONFIG);
+const sessionBridge = createSessionBridge(RUNTIME_CONFIG);
 
 Alpine.store('auth', createAuthStore());
 
-document.addEventListener('alpine:init', () => {
-  Alpine.data('landingAuthPanel', () => createLandingAuthPanel(authController));
-  Alpine.data('dashboardShell', () => createDashboardShell(authController));
-  Alpine.data('notificationsTable', () =>
-    createNotificationsTable({
-      apiClient,
-      strings: STRINGS.dashboard,
-      actions: STRINGS.actions,
-    }),
-  );
-  Alpine.data('toastCenter', () => createToastCenter());
-});
+applyHeaderAuthConfig(RUNTIME_CONFIG);
+
+Alpine.data('landingAuthPanel', () => createLandingAuthPanel(sessionBridge));
+Alpine.data('dashboardShell', () => createDashboardShell(sessionBridge));
+Alpine.data('notificationsTable', () =>
+  createNotificationsTable({
+    apiClient,
+    strings: STRINGS.dashboard,
+    actions: STRINGS.actions,
+  }),
+);
+Alpine.data('toastCenter', () => createToastCenter());
 
 Alpine.start();
 
-document.addEventListener('DOMContentLoaded', () => {
-  bootstrapPage(authController);
+function startApp() {
+  bootstrapPage(sessionBridge);
   ensureMprUiLoaded();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}
 
 function createAuthStore() {
   return {
@@ -48,22 +54,47 @@ function createAuthStore() {
   };
 }
 
+function applyHeaderAuthConfig(config) {
+  const authConfig = buildAuthConfig(config);
+  const serialized = JSON.stringify(authConfig);
+  const headers = document.querySelectorAll('mpr-header');
+  headers.forEach((header) => {
+    header.setAttribute('site-id', config.googleClientId);
+    header.setAttribute('auth-config', serialized);
+  });
+  const loginButtons = document.querySelectorAll('mpr-login-button');
+  loginButtons.forEach((button) => {
+    button.setAttribute('site-id', config.googleClientId);
+    button.setAttribute('base-url', authConfig.baseUrl);
+    button.setAttribute('login-path', authConfig.loginPath);
+    button.setAttribute('logout-path', authConfig.logoutPath);
+    button.setAttribute('nonce-path', authConfig.noncePath);
+  });
+}
+
+function buildAuthConfig(config) {
+  return {
+    baseUrl: config.tauthBaseUrl,
+    loginPath: '/auth/google',
+    logoutPath: '/auth/logout',
+    noncePath: '/auth/nonce',
+    googleClientId: config.googleClientId,
+  };
+}
+
 function createLandingAuthPanel(controller) {
   return {
     STRINGS,
-    notice: STRINGS.auth.ready,
+    notice: STRINGS.auth.signingIn,
     isBusy: false,
     stopStatusWatcher: null,
     init() {
-      this.notice = STRINGS.auth.ready;
       this.stopStatusWatcher = controller.onStatusChange((status) => {
         switch (status) {
           case 'hydrating':
-            this.isBusy = true;
             this.notice = STRINGS.auth.signingIn;
             break;
           case 'ready':
-            this.isBusy = false;
             if (!window.Alpine.store('auth').isAuthenticated) {
               this.notice = STRINGS.auth.ready;
             } else {
@@ -71,7 +102,6 @@ function createLandingAuthPanel(controller) {
             }
             break;
           case 'error':
-            this.isBusy = false;
             this.notice = STRINGS.auth.failed;
             break;
           default:
@@ -79,21 +109,27 @@ function createLandingAuthPanel(controller) {
         }
       });
     },
-    async handleSignInClick() {
+    handleSignInClick() {
       if (this.isBusy) {
+        return;
+      }
+      const googleButton = document.querySelector(
+        'mpr-header [data-mpr-login="google-button"] button, mpr-header [data-mpr-login="google-button"] [role="button"]',
+      );
+      if (!googleButton) {
+        this.notice = STRINGS.auth.failed;
         return;
       }
       this.isBusy = true;
       this.notice = STRINGS.auth.signingIn;
-      try {
-        await controller.prepareGoogleButton(this.$refs.googleButton);
-        this.notice = '';
-      } catch (error) {
-        console.error('prepare sign-in failed', error);
-        this.notice = STRINGS.auth.failed;
-      } finally {
-        this.isBusy = false;
+      googleButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (typeof googleButton.focus === 'function') {
+        googleButton.focus({ preventScroll: true });
       }
+      googleButton.click();
+      setTimeout(() => {
+        this.isBusy = false;
+      }, 600);
     },
     $cleanup() {
       if (typeof this.stopStatusWatcher === 'function') {
@@ -103,7 +139,7 @@ function createLandingAuthPanel(controller) {
   };
 }
 
-function createDashboardShell(controller) {
+function createDashboardShell(bridge) {
   return {
     strings: STRINGS.dashboard,
     actions: STRINGS.actions,
@@ -128,7 +164,7 @@ function createDashboardShell(controller) {
           }
         },
       );
-      this.stopStatusWatcher = controller.onStatusChange((status) => {
+      this.stopStatusWatcher = bridge.onStatusChange((status) => {
         if (status === 'ready' || status === 'error') {
           this.hasHydrated = true;
           if (!authStore.isAuthenticated) {
@@ -141,7 +177,7 @@ function createDashboardShell(controller) {
       dispatchRefresh();
     },
     async handleLogout() {
-      await controller.logout();
+      await bridge.logout();
       this.redirectToLanding();
     },
     redirectToLanding() {
@@ -189,8 +225,7 @@ function bootstrapPage(controller) {
     });
 }
 
-function createAuthController(config) {
-  let activeNonceToken = '';
+function createSessionBridge(config) {
   let lastCallbacks = { onAuthenticated: undefined, onUnauthenticated: undefined };
   const statusListeners = new Set();
 
@@ -254,48 +289,6 @@ function createAuthController(config) {
     }
   }
 
-  async function prepareGoogleButton(targetElement) {
-    if (!targetElement) {
-      throw new Error('Google button host missing');
-    }
-    await waitFor(() => window.google && window.google.accounts && window.google.accounts.id);
-    const noncePayload = await tauthFetch(config, '/auth/nonce', { method: 'POST' });
-    activeNonceToken = noncePayload?.nonce || '';
-    if (!activeNonceToken) {
-      throw new Error('nonce_unavailable');
-    }
-    window.google.accounts.id.initialize({
-      client_id: config.googleClientId,
-      nonce: activeNonceToken,
-      ux_mode: 'popup',
-      callback: (response) => {
-        handleGoogleCredential(response).catch((error) => console.error('credential exchange failed', error));
-      },
-    });
-    window.google.accounts.id.renderButton(targetElement, {
-      theme: 'outline',
-      size: 'large',
-      width: 320,
-      text: 'signin_with',
-    });
-    window.google.accounts.id.prompt();
-  }
-
-  async function handleGoogleCredential(response) {
-    if (!response || !response.credential || !activeNonceToken) {
-      throw new Error('missing_google_credential');
-    }
-    await tauthFetch(config, '/auth/google', {
-      method: 'POST',
-      body: JSON.stringify({
-        google_id_token: response.credential,
-        nonce_token: activeNonceToken,
-      }),
-    });
-    activeNonceToken = '';
-    await hydrate(lastCallbacks);
-  }
-
   async function logout() {
     if (typeof window.logout === 'function') {
       await window.logout();
@@ -308,7 +301,7 @@ function createAuthController(config) {
     return () => statusListeners.delete(listener);
   }
 
-  return { hydrate, prepareGoogleButton, logout, onStatusChange };
+  return { hydrate, logout, onStatusChange };
 }
 
 function waitFor(checkFn, timeout = 12000) {
@@ -327,27 +320,6 @@ function waitFor(checkFn, timeout = 12000) {
       setTimeout(tick, 80);
     };
     tick();
-  });
-}
-
-function tauthFetch(config, path, options = {}) {
-  const url = new URL(path, config.tauthBaseUrl);
-  return fetch(url.toString(), {
-    method: options.method || 'GET',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-      ...(options.headers || {}),
-    },
-    body: options.body,
-  }).then(async (response) => {
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = new Error(payload?.error || 'request_failed');
-      throw error;
-    }
-    return payload;
   });
 }
 

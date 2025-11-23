@@ -7,6 +7,11 @@ const HOST = '127.0.0.1';
 const PORT = process.env.PLAYWRIGHT_PORT ? Number(process.env.PLAYWRIGHT_PORT) : 4173;
 const WEB_ROOT = path.resolve(__dirname, '../../web');
 const AUTH_CLIENT_PATH = path.resolve(__dirname, './stubs/auth-client.js');
+const runtimeConfig = {
+  tauthBaseUrl:
+    process.env.PLAYWRIGHT_TAUTH_BASE_URL || `http://${HOST}:${PORT}`,
+  apiBaseUrl: `http://${HOST}:${PORT}/api`,
+};
 
 let serverState = createDefaultState();
 
@@ -95,6 +100,12 @@ function serveStatic(filePath, res) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
+  console.log('devServer request', req.method, url.pathname);
+  if (req.method === 'GET' && url.pathname === '/runtime-config') {
+    console.log('devServer: served runtime config');
+    sendJson(res, 200, runtimeConfig);
+    return;
+  }
   if (req.method === 'POST' && url.pathname === '/testing/reset') {
     const body = await readJson(req);
     applyOverrides(body || {});

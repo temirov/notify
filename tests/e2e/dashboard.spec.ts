@@ -11,7 +11,7 @@ test.describe('Dashboard', () => {
     await configureRuntime(page, { authenticated: false });
     await page.goto('/dashboard.html');
     await expect(page).toHaveURL(/\/index\.html$/);
-    await expect(page.getByTestId('landing-sign-in')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Continue to dashboard' })).toBeVisible();
   });
 
   test('redirects after BroadcastChannel logout', async ({ page }) => {
@@ -20,11 +20,15 @@ test.describe('Dashboard', () => {
     await expect(page.getByTestId('notification-row')).toHaveCount(1);
     await page.evaluate(() => {
       const channel = new BroadcastChannel('auth');
+      if (window.__mockAuth) {
+        window.__mockAuth.authenticated = false;
+        window.__persistMockAuth && window.__persistMockAuth();
+      }
       channel.postMessage('logged_out');
       channel.close();
     });
     await expect(page).toHaveURL(/\/index\.html$/);
-    await expect(page.getByTestId('landing-sign-in')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Continue to dashboard' })).toBeVisible();
   });
 
   test('filters notifications by status selection', async ({ page, request }) => {

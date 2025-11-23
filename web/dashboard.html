@@ -9,21 +9,6 @@
       href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css"
     />
     <link rel="stylesheet" href="/assets/css/base.css" />
-    <script>
-      window.__PINGUIN_CONFIG__ = window.__PINGUIN_CONFIG__ || {
-        tauthBaseUrl: 'http://localhost:8081',
-        googleClientId: 'YOUR_GOOGLE_WEB_CLIENT_ID',
-        landingUrl: '/index.html',
-        dashboardUrl: '/dashboard.html',
-      };
-      (function loadAuthClient() {
-        const script = document.createElement('script');
-        script.defer = true;
-        const base = (window.__PINGUIN_CONFIG__.tauthBaseUrl || '').replace(/\/$/, '');
-        script.src = `${base || 'http://localhost:8081'}/static/auth-client.js`;
-        document.head.appendChild(script);
-      })();
-    </script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body data-page="dashboard" x-data="dashboardShell()">
@@ -32,6 +17,8 @@
       brand-href="/"
       nav-links='[{"label":"Landing","href":"/index.html"}]'
       theme-config='{"initialMode":"light"}'
+      site-id="991677581607-r0dj8q6irjagipali0jpca7nfp8sfj9r.apps.googleusercontent.com"
+      auth-config='{"baseUrl":"","loginPath":"/auth/google","logoutPath":"/auth/logout","noncePath":"/auth/nonce","googleClientId":"991677581607-r0dj8q6irjagipali0jpca7nfp8sfj9r.apps.googleusercontent.com"}'
     >
       <div slot="nav-right" class="profile-chip" data-testid="profile-chip">
         <template x-if="$store.auth.profile && $store.auth.profile.user_avatar_url">
@@ -159,6 +146,6 @@
         ></button>
       </template>
     </div>
-    <script type="module" src="/js/app.js"></script>
+    <script type="module" src="/js/bootstrap.js"></script>
   </body>
 </html>

@@ -1,4 +1,10 @@
 import { expect, Page } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const projectRoot = path.resolve(__dirname, '..', '..');
+const mprUiScript = fs.readFileSync(path.join(projectRoot, 'tools/mpr-ui/mpr-ui.js'), 'utf-8');
+const mprUiStyles = fs.readFileSync(path.join(projectRoot, 'tools/mpr-ui/mpr-ui.css'), 'utf-8');
 
 export async function configureRuntime(page: Page, options: { authenticated: boolean }) {
   const baseUrl = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
@@ -25,10 +31,10 @@ export async function configureRuntime(page: Page, options: { authenticated: boo
       window.__PINGUIN_CONFIG__ = {
         apiBaseUrl: '/api',
         tauthBaseUrl: base,
-        googleClientId: 'playwright-client',
         landingUrl: '/index.html',
         dashboardUrl: '/dashboard.html',
       };
+      window.__PINGUIN_RUNTIME_CONFIG_URL = '/runtime-config';
       const defaultProfile = {
         user_email: 'playwright@example.com',
         user_display_name: 'Playwright User',
@@ -102,12 +108,11 @@ export async function stubExternalAssets(page: Page) {
       body: googleStub,
     });
   });
-  const emptyScript = { contentType: 'text/javascript', body: '' };
   await page.route('https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js', (route) =>
-    route.fulfill(emptyScript),
+    route.fulfill({ contentType: 'text/javascript', body: mprUiScript }),
   );
   await page.route('https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css', (route) =>
-    route.fulfill({ contentType: 'text/css', body: '' }),
+    route.fulfill({ contentType: 'text/css', body: mprUiStyles }),
   );
 }
 
@@ -119,4 +124,22 @@ export async function resetNotifications(request: import('@playwright/test').API
 
 export async function expectToast(page: Page, text: string) {
   await expect(page.getByRole('button', { name: text }).first()).toBeVisible();
+}
+
+export async function expectHeaderGoogleButton(page: Page) {
+  await page.waitForFunction(() => Boolean(customElements?.get?.('mpr-header')));
+  const googleButtons = page.getByRole('button', { name: 'Google' });
+  await expect(googleButtons.first()).toBeVisible();
+  const handles = await googleButtons.elementHandles();
+  const uniquePositions = new Set<string>();
+  for (const handle of handles) {
+    const box = await handle.boundingBox();
+    if (!box) {
+      continue;
+    }
+    const key = `${Math.round(box.x)}-${Math.round(box.y)}-${Math.round(box.width)}-${Math.round(box.height)}`;
+    uniquePositions.add(key);
+  }
+  expect(uniquePositions.size).toBe(1);
+  await expect(googleButtons.first()).toBeVisible();
 }

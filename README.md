@@ -112,6 +112,12 @@ Pinguin is configured via environment variables. Create a `.env` file or export 
   Comma-separated list of origins allowed to call the JSON API when running cross-origin (leave empty to allow same-origin only). The docker-compose workflow serves the UI via ghttp on `http://localhost:4173`, so keep that origin in the list unless you host the web bundle elsewhere.
 - **ADMINS:**  
   Comma-separated list of administrator email addresses. Only these accounts can load the dashboard or call the HTTP API; all other sessions receive a `403` response even if they hold a valid TAuth cookie.
+- **TAUTH_BASE_URL:**  
+  Base URL for your TAuth deployment (defaults to `http://localhost:8081`). The UI loads `auth-client.js` from this origin before initializing Google Sign-In.
+- **Web authentication flow:**  
+  The browser UI relies on `<mpr-header>` and `<mpr-login-button>` from the `mpr-ui` package. Both components expect a Google OAuth Web Client ID (`site-id`) plus the TAuth endpoints noted above. Update the attributes in `web/index.html` / `web/dashboard.html` when deploying to a new TAuth instance. See `docs/mprui-integration-guide.md` for the header wiring details and `docs/tauth-usage.md` for the TAuth helper/nonce contract.
+- **Google Identity Client ID:**  
+  The web UI now ships with a baked-in Google OAuth client ID defined in `web/js/googleClient.js` (`991677581607-r0dj8q6irjagipali0jpca7nfp8sfj9r.apps.googleusercontent.com`). Update that file if your deployment uses a different Google project; Pinguin itself no longer needs the value in its environment.
 - **TAUTH_SIGNING_KEY:**  
   HS256 signing key shared with the TAuth deployment. Used to validate the `app_session` cookie.
 - **TAUTH_ISSUER:**  

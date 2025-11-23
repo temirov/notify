@@ -65,6 +65,7 @@ func TestLoadConfig(t *testing.T) {
 				TAuthSigningKey:      "signing-key",
 				TAuthIssuer:          "tauth",
 				TAuthCookieName:      "custom_session",
+				TAuthBaseURL:         "http://localhost:8081",
 				SMTPUsername:         "apikey",
 				SMTPPassword:         "secret",
 				SMTPHost:             "smtp.test",
@@ -132,6 +133,7 @@ func TestLoadConfig(t *testing.T) {
 				TAuthSigningKey:      "signing-key",
 				TAuthIssuer:          "tauth",
 				TAuthCookieName:      "custom_session",
+				TAuthBaseURL:         "http://localhost:8081",
 				SMTPUsername:         "apikey",
 				SMTPPassword:         "secret",
 				SMTPHost:             "smtp.test",
@@ -214,6 +216,7 @@ func assertConfigEquals(t *testing.T, actual Config, expected Config) {
 		actual.TAuthSigningKey != expected.TAuthSigningKey ||
 		actual.TAuthIssuer != expected.TAuthIssuer ||
 		actual.TAuthCookieName != expected.TAuthCookieName ||
+		actual.TAuthBaseURL != expected.TAuthBaseURL ||
 		actual.SMTPUsername != expected.SMTPUsername ||
 		actual.SMTPPassword != expected.SMTPPassword ||
 		actual.SMTPHost != expected.SMTPHost ||
