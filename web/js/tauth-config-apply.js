@@ -11,9 +11,6 @@
   }
   function applyAttributes() {
     const headers = document.querySelectorAll('mpr-header');
-    if (!headers.length) {
-      return;
-    }
     headers.forEach((header) => {
       if (config.googleClientId) {
         header.setAttribute('site-id', config.googleClientId);
@@ -30,6 +27,18 @@
       if (!header.getAttribute('nonce-path')) {
         header.setAttribute('nonce-path', '/auth/nonce');
       }
+    });
+    const loginButtons = document.querySelectorAll('mpr-login-button');
+    loginButtons.forEach((button) => {
+      if (config.googleClientId) {
+        button.setAttribute('site-id', config.googleClientId);
+      }
+      if (config.baseUrl) {
+        button.setAttribute('base-url', config.baseUrl);
+      }
+      button.setAttribute('login-path', '/auth/google');
+      button.setAttribute('logout-path', '/auth/logout');
+      button.setAttribute('nonce-path', '/auth/nonce');
     });
   }
   if (document.readyState === 'loading') {

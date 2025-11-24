@@ -101,8 +101,9 @@ export async function stubExternalAssets(page: Page) {
             initialize(config) {
               window.__playwrightGoogle.callback = config && config.callback;
             },
-            renderButton(el) {
-              el.innerHTML = "<button class='button secondary'>Google</button>";
+            renderButton(el, options) {
+              var label = (options && options.text) || "Sign in";
+              el.innerHTML = "<button class='button secondary'>" + label + "</button>";
             },
             prompt() {},
           },
@@ -132,9 +133,11 @@ export async function expectToast(page: Page, text: string) {
   await expect(page.getByRole('button', { name: text }).first()).toBeVisible();
 }
 
-export async function expectHeaderGoogleButton(page: Page) {
-  await page.waitForFunction(() => Boolean(customElements?.get?.('mpr-header')));
-  const googleButtons = page.getByRole('button', { name: 'Google' });
+export async function expectHeroLoginButton(page: Page, label: string) {
+  await page.waitForFunction(() => Boolean(customElements?.get?.('mpr-login-button')));
+  const container = page.getByTestId('landing-cta');
+  await expect(container).toBeVisible();
+  const googleButtons = container.locator('[data-test="google-signin"]').locator('button, [role="button"]');
   await expect(googleButtons.first()).toBeVisible();
   const handles = await googleButtons.elementHandles();
   const uniquePositions = new Set<string>();

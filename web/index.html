@@ -30,18 +30,17 @@
         <p x-text="STRINGS.landing.subheadline"></p>
         <div class="panel" aria-live="polite">
           <p class="notice" x-text="notice"></p>
-          <button
-            class="button primary"
-            type="button"
-            x-on:click="handleSignInClick()"
-            :disabled="isBusy"
-            data-testid="landing-cta"
-          >
-            <span
-              x-text="isBusy ? STRINGS.auth.signingIn : STRINGS.landing.ctaPrimary"
-            ></span>
-          </button>
-          <p class="small" style="margin-top: 0.5rem" x-text="STRINGS.landing.securityCopy"></p>
+          <div class="cta-stack">
+            <mpr-login-button
+              id="landing-login"
+              button-text="Enter workspace"
+              button-size="large"
+              button-shape="pill"
+              button-theme="filled_blue"
+              data-testid="landing-cta"
+            ></mpr-login-button>
+            <p class="small" style="margin-top: 0.5rem" x-text="STRINGS.landing.securityCopy"></p>
+          </div>
         </div>
       </section>
       <section class="anchor-section" id="status">
@@ -60,7 +59,7 @@
             </li>
             <li>
               <strong>🔐 Session security</strong>
-              <p class="text-muted">Google Identity + TAuth keep every session protected behind HttpOnly cookies.</p>
+              <p class="text-muted">Google Identity keeps every session protected behind HttpOnly cookies.</p>
             </li>
           </ul>
         </div>
@@ -70,7 +69,7 @@
       theme-switcher="toggle"
       prefix-text="Pinguin by Marco Polo Research Lab"
       privacy-link-label="Security"
-      privacy-modal-content="<p>Authentication powered by TAuth with nonce-protected Google Sign-In.</p>"
+      privacy-modal-content="<p>HttpOnly session cookies keep every operation locked to your browser.</p>"
     ></mpr-footer>
     <script type="module" src="/js/bootstrap.js"></script>
   </body>

@@ -56,7 +56,6 @@ function createLandingAuthPanel(controller) {
   return {
     STRINGS,
     notice: STRINGS.auth.signingIn,
-    isBusy: false,
     stopStatusWatcher: null,
     init() {
       this.stopStatusWatcher = controller.onStatusChange((status) => {
@@ -78,29 +77,6 @@ function createLandingAuthPanel(controller) {
             break;
         }
       });
-    },
-    handleSignInClick() {
-      if (this.isBusy) {
-        return;
-      }
-      this.triggerHeaderSignin().catch((error) => {
-        console.error('cta_signin_failed', error);
-        this.notice = STRINGS.auth.failed;
-      });
-    },
-    async triggerHeaderSignin() {
-      this.isBusy = true;
-      this.notice = STRINGS.auth.signingIn;
-      try {
-        const button = await waitForHeaderGoogleButton();
-        button.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        if (typeof button.focus === 'function') {
-          button.focus({ preventScroll: true });
-        }
-        button.click();
-      } finally {
-        this.isBusy = false;
-      }
     },
     $cleanup() {
       if (typeof this.stopStatusWatcher === 'function') {
@@ -236,6 +212,24 @@ function createSessionBridge(config) {
     });
   }
 
+  const handleHeaderAuthenticated = (event) => {
+    const profile = event?.detail?.profile || null;
+    setStatus('ready');
+    applyProfile(profile);
+    invokeCallback('onAuthenticated', profile);
+  };
+
+  const handleHeaderUnauthenticated = () => {
+    setStatus('ready');
+    applyProfile(null);
+    invokeCallback('onUnauthenticated');
+  };
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('mpr-ui:auth:authenticated', handleHeaderAuthenticated);
+    document.addEventListener('mpr-ui:auth:unauthenticated', handleHeaderUnauthenticated);
+  }
+
   async function hydrate(callbacks = {}) {
     lastCallbacks = callbacks;
     setStatus('hydrating');
@@ -292,20 +286,6 @@ function waitFor(checkFn, timeout = 12000) {
     };
     tick();
   });
-}
-
-async function waitForHeaderGoogleButton(timeout = 15000) {
-  const selector = 'mpr-header [data-mpr-login="google-button"][data-mpr-google-ready="true"] button,' +
-    ' mpr-header [data-mpr-login="google-button"][data-mpr-google-ready="true"] [role="button"]';
-  const start = Date.now();
-  while (Date.now() - start < timeout) {
-    const button = document.querySelector(selector);
-    if (button) {
-      return button;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error('google_button_not_ready');
 }
 
 function ensureMprUiLoaded() {

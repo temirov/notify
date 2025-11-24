@@ -74,10 +74,10 @@ export const STRINGS = Object.freeze({
     eyebrow: "Trusted delivery infrastructure",
     headline: "Deliver email and SMS notifications with confidence",
     subheadline:
-      "Authenticate with Google Identity, preview schedules, and manage queued notifications from a single workspace.",
-    ctaPrimary: "Continue to dashboard",
+      "Preview schedules, manage queued notifications, and keep deliveries on track from a single workspace.",
+    ctaPrimary: "Enter workspace",
     ctaSecondary: "Explore platform",
-    securityCopy: "Your session stays protected by HttpOnly cookies minted by TAuth.",
+    securityCopy: "Your session stays protected by HttpOnly cookies.",
   },
   dashboard: {
     title: "Scheduled notifications",
@@ -93,8 +93,8 @@ export const STRINGS = Object.freeze({
     loadError: "Unable to load notifications.",
   },
   auth: {
-    signingIn: "Preparing Google Sign-In…",
-    ready: "Sign in to continue",
+    signingIn: "Preparing secure session…",
+    ready: "Workspace ready",
     failed: "We could not reach the authentication service. Please retry.",
     loggedOut: "Session ended. Redirecting…",
   },
@@ -104,7 +104,7 @@ export const STRINGS = Object.freeze({
     cancel: "Cancel",
     saveChanges: "Save changes",
     close: "Close",
-    logout: "Sign out",
+    logout: "Log out",
   },
 });
 

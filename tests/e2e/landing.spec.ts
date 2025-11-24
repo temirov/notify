@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { configureRuntime, expectHeaderGoogleButton, resetNotifications, stubExternalAssets } from './utils';
+import { configureRuntime, expectHeroLoginButton, resetNotifications, stubExternalAssets } from './utils';
 
 test.describe('Landing page auth flow', () => {
   test.beforeEach(async ({ page, request }) => {
@@ -13,15 +13,21 @@ test.describe('Landing page auth flow', () => {
 
   test('shows CTA and disables button during GIS prep', async ({ page }) => {
     await page.goto('/index.html');
-    await expectHeaderGoogleButton(page);
-    const signInSurface = page.getByTestId('landing-cta');
+    await expectHeroLoginButton(page, 'Enter workspace');
+    const signInSurface = page
+      .getByTestId('landing-cta')
+      .getByRole('button', { name: 'Enter workspace' })
+      .first();
     await expect(signInSurface).toBeVisible();
   });
 
   test('completes Google/TAuth handshake and redirects to dashboard', async ({ page }) => {
     await page.goto('/index.html');
-    await expectHeaderGoogleButton(page);
-    const heroButton = page.getByTestId('landing-cta');
+    await expectHeroLoginButton(page, 'Enter workspace');
+    const heroButton = page
+      .getByTestId('landing-cta')
+      .getByRole('button', { name: 'Enter workspace' })
+      .first();
     await heroButton.click();
     await expect(heroButton).toBeVisible();
     const googleExchange = page.waitForRequest(/\/auth\/google$/);

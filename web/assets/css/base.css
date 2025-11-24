@@ -71,6 +71,13 @@ main {
   box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
 }
 
+.cta-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+}
+
 .button {
   display: inline-flex;
   align-items: center;
@@ -273,6 +280,10 @@ form label {
 .toast[data-variant="info"] {
   border-color: rgba(37, 99, 235, 0.3);
   color: #1d4ed8;
+}
+
+mpr-header [data-mpr-header="google-signin"] {
+  display: none !important;
 }
 
 .dashboard-header {
