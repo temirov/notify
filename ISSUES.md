@@ -4,13 +4,15 @@ In this file the entries (issues) record newly discovered requests or changes, w
 
 Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES.md. Start working on open issues. Work autonomously and stack up PRs.
 
-## Features  (100–199)
+## Features  (102–199)
 
-## Improvements (200–299)
+## Improvements (202–299)
 
-## BugFixes (300–399)
+## BugFixes (308–399)
 
 ## Maintenance (400–499)
+
+- [PG-400] Add profiles to @docker-compose,yml orchestration: dev for local build (using context and Dockerfiles) and docker for pulling all images from ghcr, including pinguin image
 
 ## Planning
 *do not work on these, not ready*
