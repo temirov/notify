@@ -24,7 +24,7 @@ func main() {
 	flag.Parse()
 
 	if *recipient == "" || *subject == "" || *message == "" {
-		fmt.Fprintln(os.Stderr, "Usage: client_test --to <recipient> --subject <subject> --message <message>")
+		fmt.Fprintln(os.Stderr, "Usage: go run ./tests/clientcli --to <recipient> --subject <subject> --message <message>")
 		os.Exit(1)
 	}
 

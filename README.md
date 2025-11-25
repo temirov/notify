@@ -341,13 +341,12 @@ PINGUIN_GRPC_AUTH_TOKEN=my-secret-token \
   --attachment "/tmp/notes.txt::text/plain"
 ```
 
-### Command‑Line Client Test
+### Command-Line Client Test
 
-A lightweight client test application is available under `cmd/client_test`, also as its own Go module. This client wraps the gRPC calls and demonstrates sending a notification. To run the client test, use:
+A lightweight client test application lives under `tests/clientcli` (no extra module). This client wraps the gRPC calls and demonstrates sending a notification. To run the client test, use:
 
 ```bash
-cd cmd/client_test
-go run . \
+go run ./tests/clientcli \
   --to your-email@yourdomain.com \
   --subject "Test Email" \
   --message "Hello, world!" \
