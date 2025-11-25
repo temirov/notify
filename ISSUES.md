@@ -12,7 +12,7 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 
 ## Maintenance (400–499)
 
-- [PG-400] Add profiles to @docker-compose,yml orchestration: dev for local build (using context and Dockerfiles) and docker for pulling all images from ghcr, including pinguin image
+- [PG-400] Add profiles to @docker-compose.yml orchestration: dev for local build (using context and Dockerfiles) and docker for pulling all images from ghcr, including pinguin image.
 
 ## Planning
 *do not work on these, not ready*

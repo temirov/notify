@@ -34,3 +34,7 @@ PLAN.md
 .env.*
 .DS_Store
 qodana.yaml
+
+docs/ledger-integration.md
+docs/mprui-integration-guide.md
+docs/tauth-usage.md
