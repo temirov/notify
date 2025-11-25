@@ -23,6 +23,7 @@ on:
 ```
  — docker-build workflow now listens to the Go Tests run completion and only pushes when the upstream job concludes successfully (manual dispatch retained for emergencies).
 - [x] [PG-402] Remove the vendored `third_party` directory and rely on module dependencies so local copies of tauth/protobuf sources are no longer kept in the repo. — deleted the `third_party` tree, updated `go.work`, and confirmed builds/tests succeed without local tauth/protobuf copies.
+- [x] [PG-403] Remove the standalone `cmd/client_test` module and relocate the integration test client into the `tests` package so all test tooling lives under the shared directory. — deleted the extra module, moved the helper CLI to `tests/clientcli`, updated README/Makefile/go.work, and confirmed tests still pass.
 
 ## Planning
 *do not work on these, not ready*
