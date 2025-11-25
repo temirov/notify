@@ -13,7 +13,7 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 ## Maintenance (400–499)
 
 - [x] [PG-400] Add profiles to @docker-compose.yml orchestration: dev for local build (using context and Dockerfiles) and docker for pulling all images from ghcr, including pinguin image. — docker-compose now exposes `dev` (local build) and `docker` (GHCR) profiles plus a regression test that enforces the layout.
-- [ ] [PG-401] Only run GH docker-build.yml pipeline if go-test.yml workflow succeeds. Example 
+- [x] [PG-401] Only run GH docker-build.yml pipeline if go-test.yml workflow succeeds. Example 
 ```yml
 on:
   workflow_run:
@@ -21,6 +21,7 @@ on:
     types:
       - completed
 ```
+ — docker-build workflow now listens to the Go Tests run completion and only pushes when the upstream job concludes successfully (manual dispatch retained for emergencies).
 
 ## Planning
 *do not work on these, not ready*
