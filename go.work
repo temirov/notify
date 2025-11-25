@@ -4,5 +4,4 @@ use (
 	.
 	./clients/cli
 	./cmd/client_test
-	./third_party/github.com/tyemirov/tauth
 )

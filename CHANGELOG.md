@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Removed the `third_party` directory and rely entirely on module-managed dependencies, simplifying Go workspace setup and proto regeneration (PG-402).
 - Gated the docker-build GitHub Actions workflow so it only runs after the Go Tests workflow completes successfully, while preserving manual dispatch for emergencies (PG-401).
 - Added `dev` and `docker` docker-compose profiles plus a regression test and README guidance so operators can choose between local builds and GHCR-hosted images (PG-400).
 - Fixed HTTP server startup by registering static assets after `/api` routes, eliminating the Gin catch-all panic when `HTTP_STATIC_ROOT` is configured (BF-306).
