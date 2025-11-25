@@ -8,12 +8,23 @@ import (
 	"sync"
 )
 
+const defaultHTTPStaticRoot = "/web"
+
 type Config struct {
 	DatabasePath     string
 	GRPCAuthToken    string
 	LogLevel         string
 	MaxRetries       int
 	RetryIntervalSec int
+
+	HTTPListenAddr     string
+	HTTPStaticRoot     string
+	HTTPAllowedOrigins []string
+	AdminEmails        []string
+
+	TAuthSigningKey string
+	TAuthIssuer     string
+	TAuthCookieName string
 
 	SMTPUsername string
 	SMTPPassword string
@@ -41,6 +52,9 @@ func LoadConfig() (Config, error) {
 		loadEnvString("LOG_LEVEL", &configuration.LogLevel),
 		loadEnvInt("MAX_RETRIES", &configuration.MaxRetries),
 		loadEnvInt("RETRY_INTERVAL_SEC", &configuration.RetryIntervalSec),
+		loadEnvString("HTTP_LISTEN_ADDR", &configuration.HTTPListenAddr),
+		loadEnvString("TAUTH_SIGNING_KEY", &configuration.TAuthSigningKey),
+		loadEnvString("TAUTH_ISSUER", &configuration.TAuthIssuer),
 		loadEnvString("SMTP_USERNAME", &configuration.SMTPUsername),
 		loadEnvString("SMTP_PASSWORD", &configuration.SMTPPassword),
 		loadEnvString("SMTP_HOST", &configuration.SMTPHost),
@@ -72,9 +86,26 @@ func LoadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("configuration errors: %s", strings.Join(errorMessages, ", "))
 	}
 
+	configuration.HTTPStaticRoot = strings.TrimSpace(os.Getenv("HTTP_STATIC_ROOT"))
+	if configuration.HTTPStaticRoot == "" {
+		configuration.HTTPStaticRoot = defaultHTTPStaticRoot
+	}
 	configuration.TwilioAccountSID = strings.TrimSpace(os.Getenv("TWILIO_ACCOUNT_SID"))
 	configuration.TwilioAuthToken = strings.TrimSpace(os.Getenv("TWILIO_AUTH_TOKEN"))
 	configuration.TwilioFromNumber = strings.TrimSpace(os.Getenv("TWILIO_FROM_NUMBER"))
+	configuration.TAuthCookieName = strings.TrimSpace(os.Getenv("TAUTH_COOKIE_NAME"))
+	if configuration.TAuthCookieName == "" {
+		configuration.TAuthCookieName = "app_session"
+	}
+	configuration.HTTPAllowedOrigins = parseCSV(os.Getenv("HTTP_ALLOWED_ORIGINS"))
+	adminListRaw := strings.TrimSpace(os.Getenv("ADMINS"))
+	if adminListRaw == "" {
+		return Config{}, fmt.Errorf("configuration errors: missing admin emails")
+	}
+	configuration.AdminEmails = parseCSV(adminListRaw)
+	if len(configuration.AdminEmails) == 0 {
+		return Config{}, fmt.Errorf("configuration errors: missing admin emails")
+	}
 
 	return configuration, nil
 }
@@ -82,7 +113,7 @@ func LoadConfig() (Config, error) {
 func loadEnvString(environmentKey string, destination *string) func() error {
 	const missingEnvFormat = "missing environment variable %s"
 	return func() error {
-		environmentValue := os.Getenv(environmentKey)
+		environmentValue := strings.TrimSpace(os.Getenv(environmentKey))
 		if environmentValue == "" {
 			return fmt.Errorf(missingEnvFormat, environmentKey)
 		}
@@ -110,4 +141,21 @@ func loadEnvInt(environmentKey string, destination *int) func() error {
 
 func (configuration Config) TwilioConfigured() bool {
 	return configuration.TwilioAccountSID != "" && configuration.TwilioAuthToken != "" && configuration.TwilioFromNumber != ""
+}
+
+func parseCSV(value string) []string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	rawParts := strings.Split(trimmed, ",")
+	var normalized []string
+	for _, part := range rawParts {
+		candidate := strings.TrimSpace(part)
+		if candidate == "" {
+			continue
+		}
+		normalized = append(normalized, candidate)
+	}
+	return normalized
 }

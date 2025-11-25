@@ -43,10 +43,15 @@ func (store *notificationRetryStore) ApplyAttemptResult(ctx context.Context, job
 	if err != nil {
 		return err
 	}
-	record.Status = update.Status
+	canonicalStatus := model.CanonicalStatus(model.NotificationStatus(update.Status))
+	if canonicalStatus == "" {
+		canonicalStatus = model.StatusErrored
+	}
+	record.Status = canonicalStatus
 	record.ProviderMessageID = update.ProviderMessageID
 	record.RetryCount = update.RetryCount
 	record.LastAttemptedAt = update.LastAttemptedAt
+	record.UpdatedAt = update.LastAttemptedAt
 	return model.SaveNotification(ctx, store.database, record)
 }
 
@@ -82,23 +87,23 @@ func (dispatcher *notificationDispatcher) Attempt(ctx context.Context, job sched
 		if sendErr != nil {
 			return scheduler.DispatchResult{}, sendErr
 		}
-		return scheduler.DispatchResult{Status: model.StatusSent}, nil
+		return scheduler.DispatchResult{Status: string(model.StatusSent)}, nil
 	case model.NotificationSMS:
 		if dispatcher.serviceInstance.smsSender == nil || !dispatcher.serviceInstance.smsEnabled {
 			dispatcher.serviceInstance.logger.Warn("Skipping SMS retry because delivery is disabled", "notification_id", notificationRecord.NotificationID)
-			return scheduler.DispatchResult{Status: model.StatusFailed}, ErrSMSDisabled
+			return scheduler.DispatchResult{Status: string(model.StatusErrored)}, ErrSMSDisabled
 		}
 		providerMessageID, sendErr := dispatcher.serviceInstance.smsSender.SendSms(ctx, notificationRecord.Recipient, notificationRecord.Message)
 		if sendErr != nil {
 			return scheduler.DispatchResult{}, sendErr
 		}
 		return scheduler.DispatchResult{
-			Status:            model.StatusSent,
+			Status:            string(model.StatusSent),
 			ProviderMessageID: providerMessageID,
 		}, nil
 	default:
 		dispatcher.serviceInstance.logger.Error("Unsupported notification type during retry", "notification_id", notificationRecord.NotificationID)
-		return scheduler.DispatchResult{Status: model.StatusFailed}, fmt.Errorf("unsupported notification type: %s", notificationRecord.NotificationType)
+		return scheduler.DispatchResult{Status: string(model.StatusErrored)}, fmt.Errorf("unsupported notification type: %s", notificationRecord.NotificationType)
 	}
 }
 

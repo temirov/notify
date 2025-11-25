@@ -20,11 +20,21 @@ type NotificationService interface {
 	SendNotification(ctx context.Context, request model.NotificationRequest) (model.NotificationResponse, error)
 	// GetNotificationStatus retrieves the stored notification status.
 	GetNotificationStatus(ctx context.Context, notificationID string) (model.NotificationResponse, error)
+	// ListNotifications returns stored notifications honoring the provided filters.
+	ListNotifications(ctx context.Context, filters model.NotificationListFilters) ([]model.NotificationResponse, error)
+	// RescheduleNotification updates the scheduled send time for a queued notification.
+	RescheduleNotification(ctx context.Context, notificationID string, scheduledFor time.Time) (model.NotificationResponse, error)
+	// CancelNotification transitions a queued notification to cancelled so workers skip it.
+	CancelNotification(ctx context.Context, notificationID string) (model.NotificationResponse, error)
 	// StartRetryWorker begins a background worker that processes retries with exponential backoff.
 	StartRetryWorker(ctx context.Context)
 }
 
-var ErrSMSDisabled = errors.New("sms delivery disabled: missing Twilio credentials")
+var (
+	ErrSMSDisabled             = errors.New("sms delivery disabled: missing Twilio credentials")
+	ErrScheduleInPast          = errors.New("notification schedule must be in the future")
+	ErrNotificationNotEditable = errors.New("notification must be queued before editing")
+)
 
 const (
 	maxAttachmentCount           = 10
@@ -151,7 +161,7 @@ func (serviceInstance *notificationServiceImpl) SendNotification(ctx context.Con
 		}
 		if dispatchError != nil {
 			serviceInstance.logger.Error("Immediate dispatch failed", "error", dispatchError)
-			newNotification.Status = model.StatusFailed
+			newNotification.Status = model.StatusErrored
 			newNotification.LastAttemptedAt = currentTime
 		}
 	}
@@ -182,6 +192,72 @@ func (serviceInstance *notificationServiceImpl) GetNotificationStatus(ctx contex
 	return model.NewNotificationResponse(*notificationRecord), nil
 }
 
+func (serviceInstance *notificationServiceImpl) ListNotifications(ctx context.Context, filters model.NotificationListFilters) ([]model.NotificationResponse, error) {
+	records, err := model.ListNotifications(ctx, serviceInstance.database, filters)
+	if err != nil {
+		serviceInstance.logger.Error("Failed to list notifications", "error", err)
+		return nil, err
+	}
+	responses := make([]model.NotificationResponse, 0, len(records))
+	for _, record := range records {
+		responses = append(responses, model.NewNotificationResponse(record))
+	}
+	return responses, nil
+}
+
+func (serviceInstance *notificationServiceImpl) RescheduleNotification(ctx context.Context, notificationID string, scheduledFor time.Time) (model.NotificationResponse, error) {
+	trimmedID := strings.TrimSpace(notificationID)
+	if trimmedID == "" {
+		return model.NotificationResponse{}, fmt.Errorf("missing notification_id")
+	}
+	normalizedSchedule := scheduledFor.UTC()
+	if normalizedSchedule.Before(time.Now().UTC()) {
+		serviceInstance.logger.Warn("Rejecting reschedule because schedule is in the past", "notification_id", trimmedID, "scheduled_for", normalizedSchedule)
+		return model.NotificationResponse{}, ErrScheduleInPast
+	}
+	existingNotification, fetchErr := model.MustGetNotificationByID(ctx, serviceInstance.database, trimmedID)
+	if fetchErr != nil {
+		serviceInstance.logger.Error("Failed to fetch notification for reschedule", "notification_id", trimmedID, "error", fetchErr)
+		return model.NotificationResponse{}, fetchErr
+	}
+	if existingNotification.Status != model.StatusQueued {
+		serviceInstance.logger.Warn("Rejecting reschedule because notification is not queued", "notification_id", trimmedID, "status", existingNotification.Status)
+		return model.NotificationResponse{}, ErrNotificationNotEditable
+	}
+	scheduleCopy := normalizedSchedule
+	existingNotification.ScheduledFor = &scheduleCopy
+	existingNotification.UpdatedAt = time.Now().UTC()
+	if saveErr := model.SaveNotification(ctx, serviceInstance.database, existingNotification); saveErr != nil {
+		serviceInstance.logger.Error("Failed to reschedule notification", "notification_id", trimmedID, "error", saveErr)
+		return model.NotificationResponse{}, saveErr
+	}
+	return model.NewNotificationResponse(*existingNotification), nil
+}
+
+func (serviceInstance *notificationServiceImpl) CancelNotification(ctx context.Context, notificationID string) (model.NotificationResponse, error) {
+	trimmedID := strings.TrimSpace(notificationID)
+	if trimmedID == "" {
+		return model.NotificationResponse{}, fmt.Errorf("missing notification_id")
+	}
+	existingNotification, fetchErr := model.MustGetNotificationByID(ctx, serviceInstance.database, trimmedID)
+	if fetchErr != nil {
+		serviceInstance.logger.Error("Failed to fetch notification for cancellation", "notification_id", trimmedID, "error", fetchErr)
+		return model.NotificationResponse{}, fetchErr
+	}
+	if existingNotification.Status != model.StatusQueued {
+		serviceInstance.logger.Warn("Rejecting cancellation because notification is not queued", "notification_id", trimmedID, "status", existingNotification.Status)
+		return model.NotificationResponse{}, ErrNotificationNotEditable
+	}
+	existingNotification.Status = model.StatusCancelled
+	existingNotification.ScheduledFor = nil
+	existingNotification.UpdatedAt = time.Now().UTC()
+	if saveErr := model.SaveNotification(ctx, serviceInstance.database, existingNotification); saveErr != nil {
+		serviceInstance.logger.Error("Failed to cancel notification", "notification_id", trimmedID, "error", saveErr)
+		return model.NotificationResponse{}, saveErr
+	}
+	return model.NewNotificationResponse(*existingNotification), nil
+}
+
 func (serviceInstance *notificationServiceImpl) StartRetryWorker(ctx context.Context) {
 	worker, workerErr := scheduler.NewWorker(scheduler.Config{
 		Repository:    newNotificationRetryStore(serviceInstance.database),
@@ -189,8 +265,8 @@ func (serviceInstance *notificationServiceImpl) StartRetryWorker(ctx context.Con
 		Logger:        serviceInstance.logger,
 		Interval:      time.Duration(serviceInstance.retryIntervalSec) * time.Second,
 		MaxRetries:    serviceInstance.maxRetries,
-		SuccessStatus: model.StatusSent,
-		FailureStatus: model.StatusFailed,
+		SuccessStatus: string(model.StatusSent),
+		FailureStatus: string(model.StatusErrored),
 	})
 	if workerErr != nil {
 		serviceInstance.logger.Error("Failed to initialize retry worker", "error", workerErr)

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pinguin Dashboard</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css"
+    />
+    <link rel="stylesheet" href="/assets/css/base.css" />
+    <script defer src="/js/tauth-config.js"></script>
+    <script defer src="/js/tauth-config-apply.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <body data-page="dashboard" x-data="dashboardShell()">
+    <mpr-header
+      brand-label="Pinguin"
+      brand-href="/"
+      nav-links='[{"label":"Landing","href":"/index.html"}]'
+      theme-config='{"initialMode":"light"}'
+      login-path="/auth/google"
+      logout-path="/auth/logout"
+      nonce-path="/auth/nonce"
+    >
+      <div slot="nav-right" class="profile-chip" data-testid="profile-chip">
+        <template x-if="$store.auth.profile && $store.auth.profile.user_avatar_url">
+          <img :src="$store.auth.profile.user_avatar_url" alt="User avatar" />
+        </template>
+        <span x-text="$store.auth.profile?.user_display_name || $store.auth.profile?.user_email || 'Guest'"></span>
+      </div>
+    </mpr-header>
+    <main class="anchor-section">
+      <header class="dashboard-header">
+        <div>
+          <h1 x-text="strings.title"></h1>
+          <p x-text="strings.subtitle"></p>
+        </div>
+        <div class="filters">
+          <button class="button secondary" type="button" x-on:click="refreshNotifications()" x-text="actions.refresh"></button>
+          <button class="button secondary" type="button" x-on:click="handleLogout()" x-text="actions.logout"></button>
+        </div>
+      </header>
+    <section class="panel" x-data="notificationsTable()" data-testid="notifications-table">
+        <div class="filters" style="margin-bottom: 1rem">
+          <label style="flex: 1; min-width: 200px">
+            <span>Filter by status</span>
+            <select x-model="statusFilter" x-on:change="loadNotifications()">
+              <template x-for="option in STATUS_OPTIONS" :key="option.value">
+                <option :value="option.value" x-text="option.label"></option>
+              </template>
+            </select>
+          </label>
+          <button class="button secondary" type="button" x-on:click="loadNotifications()" x-text="actions.refresh"></button>
+        </div>
+        <template x-if="errorMessage">
+          <p class="notice" data-variant="error" x-text="errorMessage"></p>
+        </template>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Notification</th>
+                <th>Status</th>
+                <th>Recipient</th>
+                <th>Scheduled for</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-if="isLoading">
+                <tr>
+                  <td colspan="5" class="empty-state">Loading notifications…</td>
+                </tr>
+              </template>
+              <template x-if="!isLoading && notifications.length === 0">
+                <tr>
+                  <td colspan="5" class="empty-state" x-text="strings.emptyState"></td>
+                </tr>
+              </template>
+              <template x-for="item in notifications" :key="item.id">
+                <tr data-testid="notification-row">
+                  <td>
+                    <strong x-text="item.subject || 'Untitled notification'"></strong>
+                    <p class="text-muted">Created <span x-text="formatTimestamp(item.createdAt)"></span></p>
+                  </td>
+                  <td>
+                    <span class="status-badge" :data-variant="item.status" x-text="formatStatus(item.status)"></span>
+                  </td>
+                  <td>
+                    <span x-text="item.recipient"></span>
+                  </td>
+                  <td x-text="formatTimestamp(item.scheduledFor)"></td>
+                  <td style="min-width: 220px">
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap">
+                      <button
+                        class="button secondary"
+                        type="button"
+                        x-on:click="openScheduleDialog(item)"
+                        :disabled="item.status !== 'queued'"
+                        x-text="actions.reschedule"
+                      ></button>
+                      <button
+                        class="button danger"
+                        type="button"
+                        x-on:click="cancelNotification(item.id)"
+                        :disabled="item.status !== 'queued'"
+                        x-text="actions.cancel"
+                      ></button>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <dialog class="dialog" x-ref="scheduleDialog">
+          <form class="dialog__body" x-on:submit.prevent="submitSchedule">
+            <div>
+              <h3 x-text="strings.scheduleDialogTitle"></h3>
+              <p class="text-muted" x-text="strings.scheduleDialogDescription"></p>
+            </div>
+            <label>
+              <span>Delivery time</span>
+              <input type="datetime-local" x-model="scheduleForm.scheduledTime" required />
+            </label>
+            <div style="display: flex; gap: 0.75rem; justify-content: flex-end">
+              <button class="button secondary" type="button" x-on:click="closeScheduleDialog()" x-text="actions.close"></button>
+              <button class="button primary" type="submit" x-text="actions.saveChanges"></button>
+            </div>
+          </form>
+        </dialog>
+      </section>
+    </main>
+    <mpr-footer
+      theme-switcher="toggle"
+      prefix-text="Pinguin by Marco Polo Research Lab"
+      privacy-link-label="Security"
+      privacy-modal-content="<p>HttpOnly session cookies keep every operation locked to your browser.</p>"
+    ></mpr-footer>
+    <div class="toast-center" x-data="toastCenter()" x-init="init()" aria-live="polite">
+      <template x-for="toast in toasts" :key="toast.id">
+        <button
+          type="button"
+          class="toast"
+          :data-variant="toast.variant"
+          x-on:click="dismissToast(toast.id)"
+          x-text="toast.message"
+        ></button>
+      </template>
+    </div>
+    <script type="module" src="/js/bootstrap.js"></script>
+  </body>
+</html>

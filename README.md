@@ -104,6 +104,28 @@ Pinguin is configured via environment variables. Create a `.env` file or export 
 
 - **OPERATION_TIMEOUT_SEC:**  
   Maximum number of seconds to wait for a send attempt before treating it as failed. Set this to `30` seconds unless your provider requires longer operations.
+- **HTTP_LISTEN_ADDR:**  
+  Address used by the Gin HTTP server that serves the UI + JSON API (e.g. `:8080`).
+- **HTTP_STATIC_ROOT:**  
+  Filesystem path that holds the `/web` assets served to browsers (defaults to `/web` when unset; docker-compose mounts the same path).
+- **HTTP_ALLOWED_ORIGINS:**  
+  Comma-separated list of origins allowed to call the JSON API when running cross-origin (leave empty to allow same-origin only). The docker-compose workflow serves the UI via ghttp on `http://localhost:4173`, so keep that origin in the list unless you host the web bundle elsewhere.
+- **ADMINS:**  
+  Comma-separated list of administrator email addresses. Only these accounts can load the dashboard or call the HTTP API; all other sessions receive a `403` response even if they hold a valid TAuth cookie.
+- **TAuth CORS allowlist:**  
+  When you serve the UI from a different origin (ghttp on `http://localhost:4173`, a CDN, etc.), TAuth must enable CORS and allow both the UI origin *and* `https://accounts.google.com`. Google Identity Services performs the nonce/login exchange from the `accounts.google.com` origin, so omitting it results in `auth.login.nonce_mismatch` errors. The sample `.env.tauth.example` includes `APP_CORS_ALLOWED_ORIGINS="http://localhost:4173,https://accounts.google.com"` for this reason—extend the list with any additional UI origins you deploy.
+- **Front-end TAuth config:**  
+  The web bundle reads `/js/tauth-config.js` (see the file for the default values) to learn the TAuth base URL + Google client ID. Update that file—or serve a different version per environment—to point the UI at your TAuth deployment. Pinguin itself does not need to know this URL; only the shared signing key matters to the backend.
+- **Web authentication flow:**  
+  The browser UI relies on `<mpr-header>` and `<mpr-login-button>` from the `mpr-ui` package. Both components expect a Google OAuth Web Client ID (`site-id`) plus the TAuth endpoints noted above. Update the attributes in `web/index.html` / `web/dashboard.html` when deploying to a new TAuth instance. See `docs/mprui-integration-guide.md` for the header wiring details and `docs/tauth-usage.md` for the TAuth helper/nonce contract.
+- **Google Identity Client ID:**  
+  The default Google OAuth client ID lives alongside the TAuth config in `web/js/tauth-config.js`. Update that file (and your TAuth environment) when running against a different Google project; the backend only needs the shared signing key.
+- **TAUTH_SIGNING_KEY:**  
+  HS256 signing key shared with the TAuth deployment. Used to validate the `app_session` cookie.
+- **TAUTH_ISSUER:**  
+  Expected JWT issuer written by TAuth (usually `tauth`).
+- **TAUTH_COOKIE_NAME:**  
+  Optional override for the session cookie name. Defaults to `app_session`.
 
 - **MAX_RETRIES:**  
   Maximum number of times the background worker will retry sending a failed notification.
@@ -169,16 +191,29 @@ export $(cat .env | xargs)
 
 ### Docker Compose deployment
 
-The repository ships with `docker-compose.yaml` to run Pinguin in a container while storing the SQLite database on a named Docker volume.
+The repository ships with `docker-compose.yaml` to run Pinguin alongside TAuth and a static file server (ghttp). The stack exposes:
 
-1. Copy the sample environment file and update the placeholders:
+- gRPC: `localhost:50051`
+- HTTP API: `http://localhost:8080`
+- TAuth: `http://localhost:8081`
+- Front-end bundle via ghttp: `http://localhost:4173`
+
+Open `http://localhost:4173` in your browser for the landing/dashboard UI. The HTTP API on `http://localhost:8080` remains available for CLI/grpcurl clients, but browsers should never point to that port directly.
+
+1. Copy the sample environment files and update the placeholders. **Use the same signing key in both files** so TAuth and Pinguin agree on JWT validation.
 
    ```bash
    cp .env.pinguin.example .env.pinguin
-   ${EDITOR:-vi} .env.pinguin
+   cp .env.tauth.example .env.tauth
+   ${EDITOR:-vi} .env.pinguin .env.tauth
    ```
 
-   Ensure `DATABASE_PATH=/var/lib/pinguin/pinguin.db` remains set so the server writes into the mounted directory.
+   - `.env.pinguin` configures the gRPC/HTTP server plus SMTP/Twilio credentials.
+   - When serving the UI via ghttp, ensure `HTTP_ALLOWED_ORIGINS` includes `http://localhost:4173` so CORS accepts dashboard requests.
+   - `.env.tauth` configures the Google OAuth client, signing key, and CORS settings for local development.
+   - Keep `TAUTH_SIGNING_KEY` (Pinguin) identical to `APP_JWT_SIGNING_KEY` (TAuth) so cookie validation succeeds.
+   - Ensure `HTTP_ALLOWED_ORIGINS` includes the UI host (`http://localhost:4173` when using the bundled ghttp server). Comma-separate additional origins if you front the UI elsewhere.
+   - Match the same UI origin in `.env.tauth` via `APP_CORS_ALLOWED_ORIGINS` so the auth endpoints accept browser requests (use `http://localhost:4173` for the default setup).
 
 2. Build and start the stack (this creates the named Docker volume `pinguin-data` automatically):
 
@@ -186,7 +221,7 @@ The repository ships with `docker-compose.yaml` to run Pinguin in a container wh
    docker compose up --build
    ```
 
-   The server listens on `localhost:50051` and writes the SQLite file to the Docker-managed volume. The container runs as root, so no manual permission adjustments are required for the mounted volume.
+   Pinguin writes its SQLite file to the Docker-managed volume, validates browser sessions issued by the colocated TAuth instance, and exposes the HTTP API on port 8080. The static landing/dashboard bundle is served by ghttp on `http://localhost:4173`.
 
 3. Stop the stack when you are finished:
 
@@ -199,6 +234,34 @@ To inspect the persisted database file later, run:
 ```bash
 docker volume inspect pinguin-data
 ```
+
+### Docker quickstart (full stack)
+
+1. Copy the sample env files (one command per file so you can edit secrets immediately):
+
+   ```bash
+   timeout -k 5s -s SIGKILL 5s cp .env.pinguin.example .env.pinguin
+   timeout -k 5s -s SIGKILL 5s cp .env.tauth.example .env.tauth
+   ```
+
+2. Edit `.env.pinguin` (SMTP/Twilio + shared signing key) and `.env.tauth` (Google client ID + the same signing key + `APP_CORS_ALLOWED_ORIGINS=["http://localhost:4173"]`).
+3. Start the orchestration:
+
+   ```bash
+   timeout -k 30s -s SIGKILL 30s docker compose up --build
+   ```
+
+   - gRPC server → `localhost:50051`
+   - HTTP API → `http://localhost:8080`
+   - TAuth → `http://localhost:8081`
+   - UI (landing + dashboard) → `http://localhost:4173`
+
+4. Visit `http://localhost:4173` in your browser, sign in via Google/TAuth, and interact with the dashboard (the UI automatically talks to the API on port 8080).
+5. When finished, stop the stack:
+
+   ```bash
+   timeout -k 30s -s SIGKILL 30s docker compose down
+   ```
 
 ---
 
@@ -345,7 +408,48 @@ grpcurl -d '{
    A background worker periodically polls the database for notifications that are still queued or have failed and reattempts sending them with exponential backoff.
 
 4. **Status Retrieval:**  
-   Clients can query the notification’s status using the `GetNotificationStatus` RPC until the status changes to `sent` or `failed`.
+   Clients can query the notification’s status using the `GetNotificationStatus` RPC or the `/api/notifications` HTTP endpoint until the status changes to `sent`, `cancelled`, or `errored` (legacy `failed` values are still returned for historical rows).
+
+---
+
+## HTTP API
+
+The gRPC server now ships with a sibling Gin HTTP server that:
+
+- Serves static assets from `HTTP_STATIC_ROOT` (future `/web` front-end).
+- Validates every authenticated request by reading the TAuth `app_session` cookie (via `TAUTH_*` settings and the shared signing key).
+- Exposes JSON endpoints for the UI:
+  - `GET /api/notifications?status=queued&status=errored` – lists stored notifications filtered by status.
+  - `PATCH /api/notifications/:id/schedule` – accepts `{"scheduled_time":"RFC3339"}` to move a queued notification.
+  - `POST /api/notifications/:id/cancel` – cancels queued notifications so workers skip them.
+  - `GET /healthz` – liveness probe (no auth required).
+
+All endpoints emit structured JSON errors (`401` for auth failures, `400` for invalid payloads, `404` when a notification does not exist, `409` when edits are requested for non-queued notifications). CORS is enabled for the origins listed via `HTTP_ALLOWED_ORIGINS`, and credentials are required so the browser sends the TAuth cookie.
+
+### Browser UI (beta)
+
+- Static assets live under `/web` and are served directly by the HTTP server (see `HTTP_STATIC_ROOT`). `index.html` provides the marketing + Google Sign-In landing experience, and `dashboard.html` renders the authenticated notifications table.
+- The UI follows AGENTS.md: Alpine components per section, mpr-ui header/footer, DOM-scoped events (`notifications:*`) for toasts + table refreshes, and all strings centralized in `js/constants.js`.
+- `js/app.js` bootstraps Alpine, hydrates the TAuth session (`auth-client.js`), and guards routes. Components interact with the new `/api/notifications` endpoints via the shared `apiClient`.
+- Authentication state is broadcast across tabs via TAuth’s `BroadcastChannel("auth")`, so signing out in one tab logs out the others automatically.
+- Handy for local testing: run the Go server with the HTTP config set, then visit `http://localhost:<http_port>/web/index.html` to exercise sign-in, reschedule, and cancellation flows without needing an external client.
+
+### Front-End Tests (Playwright)
+
+Install the Node tooling once:
+
+```bash
+npm install
+npx playwright install --with-deps
+```
+
+Then execute the browser smoke tests (landing auth CTA, dashboard cancel/reschedule flows) with:
+
+```bash
+npm test
+```
+
+The Playwright harness spins up a lightweight local server that mocks the `/api/notifications` + TAuth endpoints so the UI can be exercised without external services.
 
 ---
 

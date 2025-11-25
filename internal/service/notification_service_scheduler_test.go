@@ -19,7 +19,7 @@ func TestSendNotificationRespectsSchedule(t *testing.T) {
 	testCases := []struct {
 		name                    string
 		scheduledOffset         *time.Duration
-		expectedStatus          string
+		expectedStatus          model.NotificationStatus
 		expectImmediateDispatch bool
 	}{
 		{
@@ -473,8 +473,8 @@ func TestRetryWorkerMarksSmsDisabledAsFailed(t *testing.T) {
 	if fetchErr != nil {
 		t.Fatalf("fetch notification error: %v", fetchErr)
 	}
-	if updated.Status != model.StatusFailed {
-		t.Fatalf("expected status failed, got %s", updated.Status)
+	if updated.Status != model.StatusErrored {
+		t.Fatalf("expected status errored, got %s", updated.Status)
 	}
 	if updated.RetryCount != 1 {
 		t.Fatalf("expected retry count increment, got %d", updated.RetryCount)
@@ -554,8 +554,8 @@ func newRetryWorkerForTest(t *testing.T, serviceInstance *notificationServiceImp
 		Logger:        serviceInstance.logger,
 		Interval:      time.Duration(serviceInstance.retryIntervalSec) * time.Second,
 		MaxRetries:    serviceInstance.maxRetries,
-		SuccessStatus: model.StatusSent,
-		FailureStatus: model.StatusFailed,
+		SuccessStatus: string(model.StatusSent),
+		FailureStatus: string(model.StatusErrored),
 		Clock:         clock,
 	})
 	if err != nil {

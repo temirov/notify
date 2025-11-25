@@ -1,0 +1,138 @@
+// @ts-check
+
+const DEFAULT_CONFIG = Object.freeze({
+  tauthBaseUrl: 'http://localhost:8081',
+  landingUrl: '/index.html',
+  dashboardUrl: '/dashboard.html',
+});
+const TAUTH_CONFIG = typeof window.PINGUIN_TAUTH_CONFIG === 'object' && window.PINGUIN_TAUTH_CONFIG
+  ? window.PINGUIN_TAUTH_CONFIG
+  : {};
+const RUNTIME_CONFIG_URL_HINT =
+  typeof window.__PINGUIN_RUNTIME_CONFIG_URL === 'string'
+    ? window.__PINGUIN_RUNTIME_CONFIG_URL.trim()
+    : '';
+
+function deriveApiOriginFromConfig(config) {
+  const apiBase = config && typeof config.apiBaseUrl === 'string' ? config.apiBaseUrl : '';
+  if (apiBase.startsWith('http://') || apiBase.startsWith('https://')) {
+    try {
+      return new URL(apiBase).origin;
+    } catch {
+      // ignore invalid URL
+    }
+  }
+  if (apiBase.startsWith('/')) {
+    return '';
+  }
+  const { protocol, hostname, port } = window.location;
+  if (port === '4173') {
+    return `${protocol}//${hostname}:8080`;
+  }
+  if (port && port.length > 0) {
+    return `${protocol}//${hostname}:${port}`;
+  }
+  return `${protocol}//${hostname}`;
+}
+
+function resolveRuntimeConfigCandidates(config, hint) {
+  const candidates = [];
+  if (hint) {
+    candidates.push(hint);
+  }
+  const candidate =
+    config && typeof config.runtimeConfigUrl === 'string'
+      ? config.runtimeConfigUrl.trim()
+      : '';
+  if (candidate && !candidates.includes(candidate)) {
+    candidates.push(candidate);
+  }
+  if (!candidates.length) {
+    candidates.push('/runtime-config');
+  }
+  const origin = deriveApiOriginFromConfig(config);
+  const apiCandidate = origin ? `${origin}/runtime-config` : null;
+  if (apiCandidate && apiCandidate !== candidates[0]) {
+    candidates.push(apiCandidate);
+  }
+  return candidates;
+}
+
+async function fetchRuntimeConfig(config, hint) {
+  const candidates = resolveRuntimeConfigCandidates(config, hint);
+  let lastError;
+  for (const url of candidates) {
+    try {
+      console.info('runtime_config_candidate', url);
+      const response = await fetch(url, { credentials: 'omit' });
+      if (!response.ok) {
+        lastError = new Error(`runtime_config_${response.status}`);
+        continue;
+      }
+      return response.json();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('runtime_config_failed');
+}
+
+function loadAuthClient(baseUrl) {
+  const normalized = (baseUrl || '').replace(/\/$/, '') || DEFAULT_CONFIG.tauthBaseUrl;
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.defer = true;
+    script.crossOrigin = 'anonymous';
+    script.src = `${normalized}/static/auth-client.js`;
+    script.onload = () => resolve(true);
+    script.onerror = () => reject(new Error('auth_client_load_failed'));
+    document.head.appendChild(script);
+  });
+}
+
+function mergeConfig(base, overrides) {
+  if (!overrides || typeof overrides !== 'object') {
+    return { ...base };
+  }
+  return { ...base, ...overrides };
+}
+
+(async function bootstrap() {
+  const preloaded = window.__PINGUIN_CONFIG__ || {};
+  const skipRemote = Boolean(preloaded && preloaded.skipRemoteConfig);
+  const tauthSeed = {};
+  if (typeof TAUTH_CONFIG.baseUrl === 'string') {
+    tauthSeed.tauthBaseUrl = TAUTH_CONFIG.baseUrl;
+  }
+  if (typeof TAUTH_CONFIG.googleClientId === 'string') {
+    tauthSeed.googleClientId = TAUTH_CONFIG.googleClientId;
+  }
+  let effectiveConfig = mergeConfig(DEFAULT_CONFIG, tauthSeed);
+  effectiveConfig = mergeConfig(effectiveConfig, preloaded);
+  if (!skipRemote) {
+    try {
+      const remote = await fetchRuntimeConfig(preloaded || null, RUNTIME_CONFIG_URL_HINT);
+      const apiOverride =
+        remote && typeof remote.apiBaseUrl === 'string' ? { apiBaseUrl: remote.apiBaseUrl } : {};
+      effectiveConfig = mergeConfig(effectiveConfig, apiOverride);
+    } catch (error) {
+      console.warn('runtime config fetch failed', error);
+    }
+  }
+  const finalConfig = {
+    apiBaseUrl: effectiveConfig.apiBaseUrl,
+    tauthBaseUrl: effectiveConfig.tauthBaseUrl || DEFAULT_CONFIG.tauthBaseUrl,
+    googleClientId: effectiveConfig.googleClientId,
+    landingUrl: effectiveConfig.landingUrl || DEFAULT_CONFIG.landingUrl,
+    dashboardUrl: effectiveConfig.dashboardUrl || DEFAULT_CONFIG.dashboardUrl,
+  };
+  delete finalConfig.skipRemoteConfig;
+  delete finalConfig.runtimeConfigUrl;
+  window.__PINGUIN_CONFIG__ = finalConfig;
+  try {
+    await loadAuthClient(window.__PINGUIN_CONFIG__.tauthBaseUrl);
+  } catch (error) {
+    console.warn('auth client load failed', error);
+  }
+  await import('./app.js');
+})();

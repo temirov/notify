@@ -1,0 +1,33 @@
+import { defineConfig, devices } from '@playwright/test';
+
+const testServerUrl = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
+
+export default defineConfig({
+  testDir: './tests/e2e',
+  timeout: 30 * 1000,
+  expect: {
+    timeout: 5 * 1000,
+  },
+  fullyParallel: false,
+  reporter: [['list']],
+  workers: 1,
+  use: {
+    baseURL: testServerUrl,
+    headless: true,
+    actionTimeout: 5 * 1000,
+    trace: 'on-first-retry',
+  },
+  webServer: {
+    command: 'node tests/support/devServer.js',
+    url: testServerUrl,
+    reuseExistingServer: !process.env.CI,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+});
