@@ -1,21 +1,18 @@
 name: Build Docker Image
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - Go Tests
+    types:
+      - completed
     branches:
       - master
-    paths:
-      - 'Dockerfile'
-      - 'cmd/**'
-      - 'pkg/**'
-      - 'proto/**'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/docker-build.yml'
   workflow_dispatch:
 
 jobs:
   build-and-push:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -47,6 +44,6 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' && (github.event_name != 'workflow_run' || github.event.workflow_run.event == 'push') }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

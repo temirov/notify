@@ -1,5 +1,21 @@
+x-pinguin-service: &pinguin-service
+  restart: unless-stopped
+  depends_on:
+    - tauth
+  ports:
+    - "50051:50051"
+    - "8080:8080"
+  env_file:
+    - .env.pinguin
+  volumes:
+    - pinguin-data:/app/data
+    - ./web:/web:ro
+
 services:
   ghttp:
+    profiles:
+      - dev
+      - docker
     image: ghcr.io/tyemirov/ghttp:latest
     container_name: ghttp
     restart: unless-stopped
@@ -10,6 +26,9 @@ services:
       - "4173:8080"
 
   tauth:
+    profiles:
+      - dev
+      - docker
     image: ghcr.io/tyemirov/tauth:latest
     container_name: tauth
     restart: unless-stopped
@@ -18,22 +37,21 @@ services:
     env_file:
       - .env.tauth
 
-  pinguin:
+  pinguin-dev:
+    <<: *pinguin-service
+    profiles:
+      - dev
+    container_name: pinguin-dev
     build:
       context: .
-    container_name: pinguin
-    restart: unless-stopped
-    depends_on:
-      - tauth
-    ports:
-      - "50051:50051"
-      - "8080:8080"
-    env_file:
-      - .env.pinguin
-    volumes:
-      - pinguin-data:/app/data
-      - ./web:/web:ro
+      dockerfile: Dockerfile
 
+  pinguin:
+    <<: *pinguin-service
+    profiles:
+      - docker
+    container_name: pinguin
+    image: ghcr.io/tyemirov/pinguin:latest
 
 volumes:
   pinguin-data:
