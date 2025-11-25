@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added `dev` and `docker` docker-compose profiles plus a regression test and README guidance so operators can choose between local builds and GHCR-hosted images (PG-400).
 - Fixed HTTP server startup by registering static assets after `/api` routes, eliminating the Gin catch-all panic when `HTTP_STATIC_ROOT` is configured (BF-306).
 - Disabled Playwright’s per-test parallelism so the shared mock dev server state is not mutated concurrently, stabilizing dashboard smoke tests (BF-305).
 - Hardened HTTP CORS defaults by disabling credentialed responses whenever `HTTP_ALLOWED_ORIGINS` is empty, preventing cross-site requests from reusing TAuth cookies (BF-304).

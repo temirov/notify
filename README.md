@@ -215,18 +215,24 @@ Open `http://localhost:4173` in your browser for the landing/dashboard UI. The H
    - Ensure `HTTP_ALLOWED_ORIGINS` includes the UI host (`http://localhost:4173` when using the bundled ghttp server). Comma-separate additional origins if you front the UI elsewhere.
    - Match the same UI origin in `.env.tauth` via `APP_CORS_ALLOWED_ORIGINS` so the auth endpoints accept browser requests (use `http://localhost:4173` for the default setup).
 
-2. Build and start the stack (this creates the named Docker volume `pinguin-data` automatically):
+2. Build and start the stack (this creates the named Docker volume `pinguin-data` automatically). Use the `dev` profile to build Pinguin from the local Dockerfile:
 
    ```bash
-   docker compose up --build
+   timeout -k 30s -s SIGKILL 30s docker compose --profile dev up --build
+   ```
+
+   To pull prebuilt images from GHCR instead of building locally, start the `docker` profile:
+
+   ```bash
+   timeout -k 30s -s SIGKILL 30s docker compose --profile docker up -d
    ```
 
    Pinguin writes its SQLite file to the Docker-managed volume, validates browser sessions issued by the colocated TAuth instance, and exposes the HTTP API on port 8080. The static landing/dashboard bundle is served by ghttp on `http://localhost:4173`.
 
-3. Stop the stack when you are finished:
+3. Stop the stack when you are finished (use the same profile you started):
 
    ```bash
-   docker compose down
+   timeout -k 30s -s SIGKILL 30s docker compose --profile dev down
    ```
 
 To inspect the persisted database file later, run:
@@ -245,11 +251,13 @@ docker volume inspect pinguin-data
    ```
 
 2. Edit `.env.pinguin` (SMTP/Twilio + shared signing key) and `.env.tauth` (Google client ID + the same signing key + `APP_CORS_ALLOWED_ORIGINS=["http://localhost:4173"]`).
-3. Start the orchestration:
+3. Start the orchestration with the `dev` profile (which builds Pinguin locally):
 
    ```bash
-   timeout -k 30s -s SIGKILL 30s docker compose up --build
+   timeout -k 30s -s SIGKILL 30s docker compose --profile dev up --build
    ```
+
+   To run the prebuilt containers from GHCR instead, run `docker compose --profile docker up -d`.
 
    - gRPC server → `localhost:50051`
    - HTTP API → `http://localhost:8080`
@@ -257,10 +265,10 @@ docker volume inspect pinguin-data
    - UI (landing + dashboard) → `http://localhost:4173`
 
 4. Visit `http://localhost:4173` in your browser, sign in via Google/TAuth, and interact with the dashboard (the UI automatically talks to the API on port 8080).
-5. When finished, stop the stack:
+5. When finished, stop the stack (match the profile you started):
 
    ```bash
-   timeout -k 30s -s SIGKILL 30s docker compose down
+   timeout -k 30s -s SIGKILL 30s docker compose --profile dev down
    ```
 
 ---

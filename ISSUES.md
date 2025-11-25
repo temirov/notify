@@ -12,7 +12,7 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 
 ## Maintenance (400–499)
 
-- [ ] [PG-400] Add profiles to @docker-compose.yml orchestration: dev for local build (using context and Dockerfiles) and docker for pulling all images from ghcr, including pinguin image.
+- [x] [PG-400] Add profiles to @docker-compose.yml orchestration: dev for local build (using context and Dockerfiles) and docker for pulling all images from ghcr, including pinguin image. — docker-compose now exposes `dev` (local build) and `docker` (GHCR) profiles plus a regression test that enforces the layout.
 - [ ] [PG-401] Only run GH docker-build.yml pipeline if go-test.yml workflow succeeds. Example 
 ```yml
 on:
@@ -24,4 +24,3 @@ on:
 
 ## Planning
 *do not work on these, not ready*
-
