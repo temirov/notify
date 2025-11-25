@@ -44,7 +44,7 @@ test.describe('Dashboard', () => {
           status: 'queued',
           created_at: now.toISOString(),
           updated_at: now.toISOString(),
-          scheduled_time: now.toISOString(),
+          scheduled_for: now.toISOString(),
           retry_count: 0,
         },
         {
@@ -56,7 +56,7 @@ test.describe('Dashboard', () => {
           status: 'cancelled',
           created_at: now.toISOString(),
           updated_at: now.toISOString(),
-          scheduled_time: now.toISOString(),
+          scheduled_for: now.toISOString(),
           retry_count: 0,
         },
       ],
@@ -111,6 +111,38 @@ test.describe('Dashboard', () => {
     await input.fill(newDate);
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expectToast(page, 'Unable to reschedule notification.');
+  });
+
+  test('pre-fills reschedule dialog with existing scheduled time', async ({ page, request }) => {
+    const scheduledFor = new Date('2030-01-02T03:04:00Z').toISOString();
+    await resetNotifications(request, {
+      notifications: [
+        {
+          notification_id: 'notif-prefill',
+          notification_type: 'email',
+          recipient: 'prefill@example.com',
+          subject: 'Prefilled',
+          message: 'Hello',
+          status: 'queued',
+          created_at: scheduledFor,
+          updated_at: scheduledFor,
+          scheduled_for: scheduledFor,
+          retry_count: 0,
+        },
+      ],
+    });
+    await configureRuntime(page, { authenticated: true });
+    await page.goto('/dashboard.html');
+    await page.getByRole('button', { name: 'Reschedule' }).click();
+    const input = page.getByLabel('Delivery time');
+    const pad = (value: number) => String(value).padStart(2, '0');
+    const expected = (() => {
+      const date = new Date(scheduledFor);
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(
+        date.getMinutes(),
+      )}`;
+    })();
+    await expect(input).toHaveValue(expected);
   });
 
   test('shows toast when cancel fails', async ({ page, request }) => {

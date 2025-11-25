@@ -36,7 +36,7 @@ function defaultNotifications() {
       status: 'queued',
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
-      scheduled_time: new Date(now.getTime() + 3600 * 1000).toISOString(),
+      scheduled_for: new Date(now.getTime() + 3600 * 1000).toISOString(),
       retry_count: 0,
     },
   ];
@@ -44,7 +44,10 @@ function defaultNotifications() {
 
 function applyOverrides(payload) {
   if (Array.isArray(payload.notifications) && payload.notifications.length > 0) {
-    serverState.notifications = payload.notifications;
+    serverState.notifications = payload.notifications.map((item) => ({
+      ...item,
+      scheduled_for: item.scheduled_for || item.scheduled_time || null,
+    }));
   } else {
     serverState.notifications = defaultNotifications();
   }
@@ -131,10 +134,10 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const body = await readJson(req);
-    const scheduled_time = body.scheduled_time || null;
+    const scheduled_for = body.scheduled_for || body.scheduled_time || null;
     serverState.notifications = serverState.notifications.map((item) => {
       if (item.notification_id === scheduleMatch[1]) {
-        return { ...item, scheduled_time, status: 'queued', updated_at: new Date().toISOString() };
+        return { ...item, scheduled_for, status: 'queued', updated_at: new Date().toISOString() };
       }
       return item;
     });

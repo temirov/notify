@@ -30,7 +30,7 @@ function mapNotification(raw) {
     status: raw.status,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
-    scheduledFor: raw.scheduled_time || null,
+    scheduledFor: raw.scheduled_for || raw.scheduled_time || null,
     retryCount: raw.retry_count ?? 0,
   };
 }
