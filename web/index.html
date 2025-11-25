@@ -31,14 +31,24 @@
         <div class="panel" aria-live="polite">
           <p class="notice" x-text="notice"></p>
           <div class="cta-stack">
-            <mpr-login-button
-              id="landing-login"
-              button-text="Enter workspace"
-              button-size="large"
-              button-shape="pill"
-              button-theme="filled_blue"
+            <button
+              class="button primary"
+              type="button"
               data-testid="landing-cta"
-            ></mpr-login-button>
+              x-on:click="
+                (() => {
+                  const host = document.querySelector('mpr-header');
+                  const root = host && host.shadowRoot;
+                  if (!root) return;
+                  const target =
+                    root.querySelector('[data-mpr-header=\'google-signin\'] button') ||
+                    root.querySelector('[data-mpr-header=\'google-signin\'] [role=\'button\']');
+                  target && target.click();
+                })()
+              "
+            >
+              Enter workspace
+            </button>
             <p class="small" style="margin-top: 0.5rem" x-text="STRINGS.landing.securityCopy"></p>
           </div>
         </div>

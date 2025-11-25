@@ -8,6 +8,8 @@ import (
 	"sync"
 )
 
+const defaultHTTPStaticRoot = "/web"
+
 type Config struct {
 	DatabasePath     string
 	GRPCAuthToken    string
@@ -51,7 +53,6 @@ func LoadConfig() (Config, error) {
 		loadEnvInt("MAX_RETRIES", &configuration.MaxRetries),
 		loadEnvInt("RETRY_INTERVAL_SEC", &configuration.RetryIntervalSec),
 		loadEnvString("HTTP_LISTEN_ADDR", &configuration.HTTPListenAddr),
-		loadEnvString("HTTP_STATIC_ROOT", &configuration.HTTPStaticRoot),
 		loadEnvString("TAUTH_SIGNING_KEY", &configuration.TAuthSigningKey),
 		loadEnvString("TAUTH_ISSUER", &configuration.TAuthIssuer),
 		loadEnvString("SMTP_USERNAME", &configuration.SMTPUsername),
@@ -85,6 +86,10 @@ func LoadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("configuration errors: %s", strings.Join(errorMessages, ", "))
 	}
 
+	configuration.HTTPStaticRoot = strings.TrimSpace(os.Getenv("HTTP_STATIC_ROOT"))
+	if configuration.HTTPStaticRoot == "" {
+		configuration.HTTPStaticRoot = defaultHTTPStaticRoot
+	}
 	configuration.TwilioAccountSID = strings.TrimSpace(os.Getenv("TWILIO_ACCOUNT_SID"))
 	configuration.TwilioAuthToken = strings.TrimSpace(os.Getenv("TWILIO_AUTH_TOKEN"))
 	configuration.TwilioFromNumber = strings.TrimSpace(os.Getenv("TWILIO_FROM_NUMBER"))

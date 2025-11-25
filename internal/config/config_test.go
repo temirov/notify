@@ -84,6 +84,49 @@ func TestLoadConfig(t *testing.T) {
 			},
 		},
 		{
+			name: "StaticRootDefaults",
+			mutateEnv: func(t *testing.T) {
+				var trimmed []envEntry
+				for _, entry := range completeEnvironment {
+					if entry.key == "HTTP_STATIC_ROOT" {
+						continue
+					}
+					trimmed = append(trimmed, entry)
+				}
+				setEnvironment(t, trimmed)
+			},
+			expectedConfig: Config{
+				DatabasePath:         "test.db",
+				GRPCAuthToken:        "unit-token",
+				LogLevel:             "INFO",
+				MaxRetries:           5,
+				RetryIntervalSec:     4,
+				HTTPListenAddr:       ":8080",
+				HTTPStaticRoot:       defaultHTTPStaticRoot,
+				HTTPAllowedOrigins:   []string{"https://app.local", "https://alt.local"},
+				AdminEmails:          []string{"admin1@example.com", "admin2@example.com"},
+				TAuthSigningKey:      "signing-key",
+				TAuthIssuer:          "tauth",
+				TAuthCookieName:      "custom_session",
+				SMTPUsername:         "apikey",
+				SMTPPassword:         "secret",
+				SMTPHost:             "smtp.test",
+				SMTPPort:             587,
+				FromEmail:            "noreply@test",
+				TwilioAccountSID:     "sid",
+				TwilioAuthToken:      "auth",
+				TwilioFromNumber:     "+10000000000",
+				ConnectionTimeoutSec: 3,
+				OperationTimeoutSec:  7,
+			},
+			assert: func(t *testing.T, cfg Config) {
+				t.Helper()
+				if !cfg.TwilioConfigured() {
+					t.Fatalf("expected Twilio to be configured")
+				}
+			},
+		},
+		{
 			name: "MissingVariable",
 			mutateEnv: func(t *testing.T) {
 				var truncated []envEntry

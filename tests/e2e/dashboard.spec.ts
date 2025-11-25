@@ -11,12 +11,7 @@ test.describe('Dashboard', () => {
     await configureRuntime(page, { authenticated: false });
     await page.goto('/dashboard.html');
     await expect(page).toHaveURL(/\/index\.html$/);
-    await expect(
-      page
-        .getByTestId('landing-cta')
-        .getByRole('button', { name: 'Enter workspace' })
-        .first(),
-    ).toBeVisible();
+    await expect(page.getByTestId('landing-cta')).toBeVisible();
   });
 
   test('redirects after BroadcastChannel logout', async ({ page }) => {
@@ -33,12 +28,7 @@ test.describe('Dashboard', () => {
       channel.close();
     });
     await expect(page).toHaveURL(/\/index\.html$/);
-    await expect(
-      page
-        .getByTestId('landing-cta')
-        .getByRole('button', { name: 'Enter workspace' })
-        .first(),
-    ).toBeVisible();
+    await expect(page.getByTestId('landing-cta')).toBeVisible();
   });
 
   test('filters notifications by status selection', async ({ page, request }) => {

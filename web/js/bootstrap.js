@@ -5,6 +5,9 @@ const DEFAULT_CONFIG = Object.freeze({
   landingUrl: '/index.html',
   dashboardUrl: '/dashboard.html',
 });
+const TAUTH_CONFIG = typeof window.PINGUIN_TAUTH_CONFIG === 'object' && window.PINGUIN_TAUTH_CONFIG
+  ? window.PINGUIN_TAUTH_CONFIG
+  : {};
 const RUNTIME_CONFIG_URL_HINT =
   typeof window.__PINGUIN_RUNTIME_CONFIG_URL === 'string'
     ? window.__PINGUIN_RUNTIME_CONFIG_URL.trim()
@@ -75,11 +78,16 @@ async function fetchRuntimeConfig(config, hint) {
 }
 
 function loadAuthClient(baseUrl) {
-  const script = document.createElement('script');
-  script.defer = true;
   const normalized = (baseUrl || '').replace(/\/$/, '') || DEFAULT_CONFIG.tauthBaseUrl;
-  script.src = `${normalized}/static/auth-client.js`;
-  document.head.appendChild(script);
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.defer = true;
+    script.crossOrigin = 'anonymous';
+    script.src = `${normalized}/static/auth-client.js`;
+    script.onload = () => resolve(true);
+    script.onerror = () => reject(new Error('auth_client_load_failed'));
+    document.head.appendChild(script);
+  });
 }
 
 function mergeConfig(base, overrides) {
@@ -90,21 +98,41 @@ function mergeConfig(base, overrides) {
 }
 
 (async function bootstrap() {
-  const preloaded = window.__PINGUIN_CONFIG__;
+  const preloaded = window.__PINGUIN_CONFIG__ || {};
   const skipRemote = Boolean(preloaded && preloaded.skipRemoteConfig);
-  let effectiveConfig = mergeConfig(DEFAULT_CONFIG, preloaded || {});
+  const tauthSeed = {};
+  if (typeof TAUTH_CONFIG.baseUrl === 'string') {
+    tauthSeed.tauthBaseUrl = TAUTH_CONFIG.baseUrl;
+  }
+  if (typeof TAUTH_CONFIG.googleClientId === 'string') {
+    tauthSeed.googleClientId = TAUTH_CONFIG.googleClientId;
+  }
+  let effectiveConfig = mergeConfig(DEFAULT_CONFIG, tauthSeed);
+  effectiveConfig = mergeConfig(effectiveConfig, preloaded);
   if (!skipRemote) {
     try {
       const remote = await fetchRuntimeConfig(preloaded || null, RUNTIME_CONFIG_URL_HINT);
-      effectiveConfig = mergeConfig(effectiveConfig, remote);
+      const apiOverride =
+        remote && typeof remote.apiBaseUrl === 'string' ? { apiBaseUrl: remote.apiBaseUrl } : {};
+      effectiveConfig = mergeConfig(effectiveConfig, apiOverride);
     } catch (error) {
       console.warn('runtime config fetch failed', error);
     }
   }
-  const finalConfig = { ...effectiveConfig };
+  const finalConfig = {
+    apiBaseUrl: effectiveConfig.apiBaseUrl,
+    tauthBaseUrl: effectiveConfig.tauthBaseUrl || DEFAULT_CONFIG.tauthBaseUrl,
+    googleClientId: effectiveConfig.googleClientId,
+    landingUrl: effectiveConfig.landingUrl || DEFAULT_CONFIG.landingUrl,
+    dashboardUrl: effectiveConfig.dashboardUrl || DEFAULT_CONFIG.dashboardUrl,
+  };
   delete finalConfig.skipRemoteConfig;
   delete finalConfig.runtimeConfigUrl;
   window.__PINGUIN_CONFIG__ = finalConfig;
-  loadAuthClient(window.__PINGUIN_CONFIG__.tauthBaseUrl);
+  try {
+    await loadAuthClient(window.__PINGUIN_CONFIG__.tauthBaseUrl);
+  } catch (error) {
+    console.warn('auth client load failed', error);
+  }
   await import('./app.js');
 })();

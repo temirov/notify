@@ -133,22 +133,27 @@ export async function expectToast(page: Page, text: string) {
   await expect(page.getByRole('button', { name: text }).first()).toBeVisible();
 }
 
-export async function expectHeroLoginButton(page: Page, label: string) {
-  await page.waitForFunction(() => Boolean(customElements?.get?.('mpr-login-button')));
-  const container = page.getByTestId('landing-cta');
-  await expect(container).toBeVisible();
-  const googleButtons = container.locator('[data-test="google-signin"]').locator('button, [role="button"]');
-  await expect(googleButtons.first()).toBeVisible();
-  const handles = await googleButtons.elementHandles();
-  const uniquePositions = new Set<string>();
-  for (const handle of handles) {
-    const box = await handle.boundingBox();
-    if (!box) {
-      continue;
+export async function expectHeaderGoogleButton(page: Page) {
+  const header = page.locator('mpr-header');
+  await expect(header).toBeVisible();
+  await expect(page.locator('mpr-login-button')).toHaveCount(0);
+  const wrapper = header.locator('[data-mpr-header="google-signin"]');
+  await expect(wrapper).toHaveCount(1);
+  await expect(wrapper).toHaveAttribute('data-mpr-google-ready', /true|loading/, { timeout: 10000 });
+  const button = wrapper.locator('[data-test="google-signin"]');
+  await expect(button).toHaveCount(1);
+  await expect(button.first()).toContainText(/sign/i);
+}
+
+export async function clickHeaderGoogleButton(page: Page) {
+  await page.evaluate(() => {
+    const header = document.querySelector('mpr-header');
+    if (!header) return;
+    const target =
+      header.querySelector('[data-mpr-header="google-signin"] [data-test="google-signin"]') ||
+      header.querySelector('[data-mpr-header="google-signin"]');
+    if (target && typeof target.click === 'function') {
+      target.click();
     }
-    const key = `${Math.round(box.x)}-${Math.round(box.y)}-${Math.round(box.width)}-${Math.round(box.height)}`;
-    uniquePositions.add(key);
-  }
-  expect(uniquePositions.size).toBe(1);
-  await expect(googleButtons.first()).toBeVisible();
+  });
 }

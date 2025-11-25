@@ -10,6 +10,7 @@ export default defineConfig({
   },
   fullyParallel: false,
   reporter: [['list']],
+  workers: 1,
   use: {
     baseURL: testServerUrl,
     headless: true,

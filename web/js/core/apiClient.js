@@ -37,7 +37,6 @@ function mapNotification(raw) {
 
 export function createApiClient(baseUrl = RUNTIME_CONFIG.apiBaseUrl) {
   const normalizedBase = baseUrl.replace(/\/$/, '') || '/api';
-  const fetcher = getFetcher();
 
   async function request(path, init = {}) {
     const url = `${normalizedBase}${path}`;
@@ -46,6 +45,7 @@ export function createApiClient(baseUrl = RUNTIME_CONFIG.apiBaseUrl) {
       'Content-Type': 'application/json',
       ...(init.headers || {}),
     };
+    const fetcher = getFetcher();
     const response = await fetcher(url, mergedInit);
     const payload = await toJson(response);
     if (!response.ok) {
