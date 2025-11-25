@@ -36,6 +36,8 @@ lint:
 
 test-fast:
 	$(LONG_TIMEOUT) go test $(ROOT_FAST_PACKAGES)
+	(cd clients/cli && $(LONG_TIMEOUT) go test ./...)
+	(cd cmd/client_test && $(LONG_TIMEOUT) go test ./...)
 
 test-slow:
 ifneq ($(strip $(ROOT_SLOW_PACKAGES)),)
