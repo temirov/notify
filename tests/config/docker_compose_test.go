@@ -1,7 +1,6 @@
-package compose_test
+package configtest
 
 import (
-	"os"
 	"strings"
 	"testing"
 
@@ -25,10 +24,7 @@ type composeBuildSpec struct {
 func TestComposeProfilesProvideLocalAndImageVariants(t *testing.T) {
 	t.Helper()
 
-	documentData, readErr := os.ReadFile("docker-compose.yaml")
-	if readErr != nil {
-		t.Fatalf("failed to read docker-compose.yaml: %v", readErr)
-	}
+	documentData := readRepoFile(t, "docker-compose.yaml")
 
 	var document composeDocument
 	if unmarshalErr := yaml.Unmarshal(documentData, &document); unmarshalErr != nil {

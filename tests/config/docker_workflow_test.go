@@ -1,7 +1,6 @@
-package compose_test
+package configtest
 
 import (
-	"os"
 	"strings"
 	"testing"
 
@@ -29,10 +28,7 @@ type dockerWorkflowJob struct {
 func TestDockerBuildWorkflowDependsOnSuccessfulGoTests(t *testing.T) {
 	t.Helper()
 
-	documentData, readErr := os.ReadFile(".github/workflows/docker-build.yml")
-	if readErr != nil {
-		t.Fatalf("failed to read docker-build workflow: %v", readErr)
-	}
+	documentData := readRepoFile(t, ".github", "workflows", "docker-build.yml")
 
 	var workflow dockerWorkflow
 	if unmarshalErr := yaml.Unmarshal(documentData, &workflow); unmarshalErr != nil {
@@ -52,7 +48,7 @@ func TestDockerBuildWorkflowDependsOnSuccessfulGoTests(t *testing.T) {
 		t.Fatalf("build-and-push job must exist")
 	}
 
-	expectedCondition := "${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}"
+	expectedCondition := "${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}"
 	if strings.TrimSpace(buildJob.If) != expectedCondition {
 		t.Fatalf("build-and-push job must guard on successful Go Tests run")
 	}
