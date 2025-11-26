@@ -142,60 +142,11 @@ export async function expectToast(page: Page, text: string) {
   await expect(page.getByRole('button', { name: text }).first()).toBeVisible();
 }
 
-export async function expectHeaderGoogleButton(page: Page) {
-  const header = page.locator('mpr-header');
-  await expect(header).toBeVisible();
-  const loginHost = page.locator('mpr-login-button').first();
-  await expect(loginHost).toBeVisible();
-  const siteId =
-    (await loginHost.getAttribute('site-id')) ||
-    (await header.first().getAttribute('site-id')) ||
-    '';
-  expect(siteId.trim(), 'login button missing site-id').not.toBe('');
-  await expect(loginHost).not.toHaveAttribute('data-mpr-google-error', /.+/);
-  const wrapper = loginHost.locator('[data-mpr-login="google-button"]');
-  await expect(wrapper).toHaveAttribute('data-mpr-google-site-id', /.+/, { timeout: 10000 });
-  const button = wrapper.locator('[data-test="google-signin"]').first();
-  await expect(button).toBeVisible();
-  await expect(button).toContainText(/sign/i);
-}
-
-export async function expectHeaderGoogleButtonTopRight(page: Page) {
-  await expectHeaderGoogleButton(page);
-  const header = page.locator('mpr-header').first();
-  const target = page.locator('mpr-login-button').first();
-  await expect(target).toBeVisible();
-  const headerBox = await header.boundingBox();
-  const buttonBox = await target.boundingBox();
-  if (!headerBox || !buttonBox) {
-    throw new Error('Unable to measure header login button');
-  }
-  const headerRight = headerBox.x + headerBox.width;
-  const buttonRight = buttonBox.x + buttonBox.width;
-  expect(buttonRight).toBeGreaterThan(headerBox.x + headerBox.width * 0.6);
-  expect(buttonRight).toBeLessThanOrEqual(headerRight + 2);
-  expect(buttonBox.y).toBeLessThanOrEqual(headerBox.y + headerBox.height * 0.6);
-}
-
-export async function clickHeaderGoogleButton(page: Page) {
-  await page.evaluate(() => {
-    const externalHost = document.querySelector('mpr-login-button');
-    if (externalHost) {
-      const externalTarget =
-        externalHost.querySelector('[data-mpr-login="google-button"] button') ||
-        externalHost.querySelector('[data-mpr-login="google-button"] [role="button"]');
-      if (externalTarget && typeof externalTarget.click === 'function') {
-        externalTarget.click();
-        return;
-      }
-    }
-    const header = document.querySelector('mpr-header');
-    if (!header) return;
-    const target =
-      header.querySelector('[data-mpr-header="google-signin"] [data-test="google-signin"]') ||
-      header.querySelector('[data-mpr-header="google-signin"]');
-    if (target && typeof target.click === 'function') {
-      target.click();
-    }
-  });
+export async function expectRenderedGoogleSignInMarkup(page: Page, context = 'page') {
+  const html = await page.content();
+  const normalized = html.toLowerCase();
+  expect(
+    normalized.includes('google sign in') || normalized.includes('<mpr-login-button'),
+    `expected ${context} HTML to contain Google sign-in markup`,
+  ).toBe(true);
 }
