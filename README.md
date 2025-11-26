@@ -361,7 +361,7 @@ Notification sent successfully. Notification ID: notif-1741932356116855000
 
 ### Using grpcurl
 
-You can also use [grpcurl](https://github.com/fullstorydev/grpcurl) to interact directly with the gRPC API. For example, to send an email notification:
+You can also use [grpcurl](https://github.com/fullstorydev/grpcurl) to interact directly with the gRPC API. The canonical protobuf definition lives at `pkg/proto/pinguin.proto`. For example, to send an email notification:
 
 ```bash
 grpcurl -d '{
