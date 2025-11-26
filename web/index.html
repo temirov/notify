@@ -60,6 +60,16 @@
               data-testid="landing-cta"
               x-on:click="
                 (() => {
+                  const externalButtonHost = document.querySelector('mpr-login-button');
+                  if (externalButtonHost) {
+                    const externalTarget =
+                      externalButtonHost.querySelector('[data-mpr-login=\'google-button\'] button') ||
+                      externalButtonHost.querySelector('[data-mpr-login=\'google-button\'] [role=\'button\']');
+                    if (externalTarget && typeof externalTarget.click === 'function') {
+                      externalTarget.click();
+                      return;
+                    }
+                  }
                   const host = document.querySelector('mpr-header');
                   const root = host && host.shadowRoot;
                   if (!root) return;
