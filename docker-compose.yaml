@@ -7,6 +7,7 @@ x-pinguin-service: &pinguin-service
     - "8080:8080"
   env_file:
     - .env.pinguin
+  pull_policy: always
   volumes:
     - pinguin-data:/app/data
     - ./web:/web:ro
@@ -19,6 +20,7 @@ services:
     image: ghcr.io/tyemirov/ghttp:latest
     container_name: ghttp
     restart: unless-stopped
+    pull_policy: always
     volumes:
       - ./web:/web:ro
     command: ["--directory", "/web", "8080"]
@@ -32,6 +34,7 @@ services:
     image: ghcr.io/tyemirov/tauth:latest
     container_name: tauth
     restart: unless-stopped
+    pull_policy: always
     ports:
       - "8081:8081"
     env_file:
