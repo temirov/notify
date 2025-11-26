@@ -41,9 +41,12 @@
     >
       <mpr-login-button
         slot="nav-right"
-        data-testid="header-login"
         button-theme="filled_blue"
         button-size="large"
+        data-testid="header-login"
+        login-path="/auth/google"
+        logout-path="/auth/logout"
+        nonce-path="/auth/nonce"
       ></mpr-login-button>
     </mpr-header>
     <main>
