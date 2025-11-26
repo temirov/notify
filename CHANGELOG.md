@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added a regression test that asserts the `third_party` directory stays absent so we continue relying solely on upstream modules for TAuth and google protos (PG-405).
 - Relocated integration tests to `tests/integration`, renamed the package to `integrationtest`, and updated build tooling accordingly (PG-404).
 - Moved the integration test client CLI into `tests/clientcli`, eliminating the extra `cmd/client_test` module and keeping all test tooling under the shared directory (PG-403).
 - Removed the `third_party` directory and rely entirely on module-managed dependencies, simplifying Go workspace setup and proto regeneration (PG-402).
