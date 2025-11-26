@@ -6,11 +6,15 @@ import (
 	"testing"
 )
 
+func repoPath(pathSegments ...string) string {
+	fullSegments := append([]string{"..", ".."}, pathSegments...)
+	return filepath.Join(fullSegments...)
+}
+
 func readRepoFile(t *testing.T, pathSegments ...string) []byte {
 	t.Helper()
 
-	fullSegments := append([]string{"..", ".."}, pathSegments...)
-	fullPath := filepath.Join(fullSegments...)
+	fullPath := repoPath(pathSegments...)
 
 	data, readErr := os.ReadFile(fullPath)
 	if readErr != nil {

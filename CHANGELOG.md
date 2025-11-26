@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- Added a regression test that asserts the `third_party` directory stays absent so we continue relying solely on upstream modules for TAuth and google protos (PG-405).
+- Relocated `pinguin.proto` to `pkg/proto/pinguin.proto` so consumer-facing definitions live under the exported packages and documented the new path (PG-406).
+- Moved the Cobra CLI into `cmd/client`, removed the extra module/go.work entry, and updated build/docs/tests to reference the unified binary (PG-407).
+- Removed the Go workspace files (`go.work`/`go.work.sum`) now that the repository relies solely on the root module (PG-408).
+- Relocated integration tests to `tests/integration`, renamed the package to `integrationtest`, and updated build tooling accordingly (PG-404).
 - Moved the integration test client CLI into `tests/clientcli`, eliminating the extra `cmd/client_test` module and keeping all test tooling under the shared directory (PG-403).
 - Removed the `third_party` directory and rely entirely on module-managed dependencies, simplifying Go workspace setup and proto regeneration (PG-402).
 - Gated the docker-build GitHub Actions workflow so it only runs after the Go Tests workflow completes successfully, while preserving manual dispatch for emergencies (PG-401).

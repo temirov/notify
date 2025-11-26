@@ -1,4 +1,4 @@
-package integration_test
+package integrationtest
 
 import (
 	"os"
@@ -13,11 +13,11 @@ func TestBuildCLIFromRepositoryRoot(t *testing.T) {
 		t.Fatalf("failed to get working directory: %v", workingDirectoryErr)
 	}
 
-	repositoryRoot := filepath.Dir(workingDirectory)
+	repositoryRoot := filepath.Dir(filepath.Dir(workingDirectory))
 	temporaryBinaryDirectory := t.TempDir()
 	temporaryBinaryPath := filepath.Join(temporaryBinaryDirectory, "pinguin-cli")
 
-	buildCommand := exec.Command("go", "build", "-o", temporaryBinaryPath, "clients/cli/main.go")
+	buildCommand := exec.Command("go", "build", "-o", temporaryBinaryPath, "./cmd/client")
 	buildCommand.Dir = repositoryRoot
 
 	commandOutput, buildErr := buildCommand.CombinedOutput()
