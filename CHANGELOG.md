@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Relocated integration tests to `tests/integration`, renamed the package to `integrationtest`, and updated build tooling accordingly (PG-404).
 - Moved the integration test client CLI into `tests/clientcli`, eliminating the extra `cmd/client_test` module and keeping all test tooling under the shared directory (PG-403).
 - Removed the `third_party` directory and rely entirely on module-managed dependencies, simplifying Go workspace setup and proto regeneration (PG-402).
 - Gated the docker-build GitHub Actions workflow so it only runs after the Go Tests workflow completes successfully, while preserving manual dispatch for emergencies (PG-401).
