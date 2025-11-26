@@ -179,6 +179,16 @@ export async function expectHeaderGoogleButtonTopRight(page: Page) {
 
 export async function clickHeaderGoogleButton(page: Page) {
   await page.evaluate(() => {
+    const externalHost = document.querySelector('mpr-login-button');
+    if (externalHost) {
+      const externalTarget =
+        externalHost.querySelector('[data-mpr-login="google-button"] button') ||
+        externalHost.querySelector('[data-mpr-login="google-button"] [role="button"]');
+      if (externalTarget && typeof externalTarget.click === 'function') {
+        externalTarget.click();
+        return;
+      }
+    }
     const header = document.querySelector('mpr-header');
     if (!header) return;
     const target =
