@@ -22,6 +22,11 @@ on:
       - completed
 ```
  — docker-build workflow now listens to the Go Tests run completion and only pushes when the upstream job concludes successfully (manual dispatch retained for emergencies).
+- [ ] [PG-404] Relocate integration tests into `tests/integration`, rename the package to `integrationtest`, and ensure they target only the public surface so the suite reflects external usage.
+- [ ] [PG-405] Remove the `third_party` directory entirely and rely strictly on upstream modules (TAuth validator, Google protos) without vendored copies.
+- [ ] [PG-406] Move `proto/pinguin.proto` under `pkg/` (e.g., `pkg/proto/`) so all shared API artifacts live with exported packages.
+- [ ] [PG-407] Relocate the CLI from `clients/cli` to `cmd/client`, fold it into the main module, and update documentation/build scripts accordingly.
+- [ ] [PG-408] Remove `go.work`/`go.work.sum` once the extra modules are gone so the repository is managed solely via the root `go.mod`.
 
 ## Planning
 *do not work on these, not ready*
