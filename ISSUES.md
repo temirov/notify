@@ -10,6 +10,8 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 
 ## BugFixes (308–399)
 
+- [ ] [PG-309] There is no more google sign in button in the header. There must have been an intgeration tests to verify it.
+
 ## Maintenance (400–499)
 
 - [x] [PG-400] Add profiles to @docker-compose.yml orchestration: dev for local build (using context and Dockerfiles) and docker for pulling all images from ghcr, including pinguin image. — docker-compose now exposes `dev` (local build) and `docker` (GHCR) profiles plus a regression test that enforces the layout.
