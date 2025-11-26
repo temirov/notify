@@ -297,13 +297,12 @@ By default, the server listens on port `50051`. The server initializes the SQLit
 
 ### Pinguin CLI
 
-The repository includes an interactive CLI at `clients/cli` built with Cobra and Viper. It lives in its own Go module so you can work on the server without pulling in extra binaries. To build or run it, switch into the module first:
+The repository includes an interactive CLI at `cmd/client` built with Cobra and Viper. It lives alongside the server so you can build it directly from the repository root:
 
 ```bash
-cd clients/cli
-go build -o pinguin-cli .
+go build -o pinguin-cli ./cmd/client
 # or run directly
-go run . send --help
+go run ./cmd/client send --help
 ```
 
 Configuration values are read from environment variables prefixed with `PINGUIN_`:

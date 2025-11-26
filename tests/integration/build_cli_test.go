@@ -17,7 +17,7 @@ func TestBuildCLIFromRepositoryRoot(t *testing.T) {
 	temporaryBinaryDirectory := t.TempDir()
 	temporaryBinaryPath := filepath.Join(temporaryBinaryDirectory, "pinguin-cli")
 
-	buildCommand := exec.Command("go", "build", "-o", temporaryBinaryPath, "./clients/cli")
+	buildCommand := exec.Command("go", "build", "-o", temporaryBinaryPath, "./cmd/client")
 	buildCommand.Dir = repositoryRoot
 
 	commandOutput, buildErr := buildCommand.CombinedOutput()
