@@ -1,7 +1,7 @@
 GO_SOURCES := $(shell find . -name '*.go' -not -path "./vendor/*" -not -path "./.git/*" -not -path "*/.git/*")
 ROOT_FAST_PACKAGES := $(shell go list ./... | grep -v '/integration$$')
 ROOT_SLOW_PACKAGES := $(shell go list ./... | grep '/integration$$')
-MODULE_DIRS := . clients/cli cmd/client_test
+MODULE_DIRS := . clients/cli
 RELEASE_TARGETS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
 RELEASE_DIRECTORY := dist
 RELEASE_BINARY_NAME := pinguin
@@ -37,7 +37,6 @@ lint:
 test-fast:
 	$(LONG_TIMEOUT) go test $(ROOT_FAST_PACKAGES)
 	(cd clients/cli && $(LONG_TIMEOUT) go test ./...)
-	(cd cmd/client_test && $(LONG_TIMEOUT) go test ./...)
 
 test-slow:
 ifneq ($(strip $(ROOT_SLOW_PACKAGES)),)
