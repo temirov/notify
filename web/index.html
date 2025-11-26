@@ -23,14 +23,19 @@
     <link rel="stylesheet" href="/assets/css/base.css" />
     <script defer src="/js/tauth-config.js"></script>
     <script defer src="/js/tauth-config-apply.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      defer
+      src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
-  <body data-page="landing">
+  <body data-page="landing" class="theme-light" data-palette="sunrise">
     <mpr-header
       id="pinguin-header"
       brand-label="Pinguin"
       brand-href="/"
-      nav-links='[{"label":"Docs","href":"#features"},{"label":"Status","href":"#status"}]'
+      nav-links='[{ "label": "Docs", "href": "https://github.com/tyemirov/pinguin" }]'
       site-id="991677581607-r0dj8q6irjagipali0jpca7nfp8sfj9r.apps.googleusercontent.com"
       base-url="http://localhost:8080"
       login-path="/auth/google"
@@ -57,32 +62,7 @@
         <div class="panel" aria-live="polite">
           <p class="notice" x-text="notice"></p>
           <div class="cta-stack">
-            <button
-              class="button primary"
-              type="button"
-              data-testid="landing-cta"
-              x-on:click="
-                (() => {
-                  const externalButtonHost = document.querySelector('mpr-login-button');
-                  if (externalButtonHost) {
-                    const externalTarget =
-                      externalButtonHost.querySelector('[data-mpr-login=\'google-button\'] button') ||
-                      externalButtonHost.querySelector('[data-mpr-login=\'google-button\'] [role=\'button\']');
-                    if (externalTarget && typeof externalTarget.click === 'function') {
-                      externalTarget.click();
-                      return;
-                    }
-                  }
-                  const host = document.querySelector('mpr-header');
-                  const root = host && host.shadowRoot;
-                  if (!root) return;
-                  const target =
-                    root.querySelector('[data-mpr-header=\'google-signin\'] button') ||
-                    root.querySelector('[data-mpr-header=\'google-signin\'] [role=\'button\']');
-                  target && target.click();
-                })()
-              "
-            >
+            <button class="button primary" type="button" data-testid="landing-cta" x-on:click="$dispatch('mpr-ui:auth:login')">
               Enter workspace
             </button>
             <p class="small" style="margin-top: 0.5rem" x-text="STRINGS.landing.securityCopy"></p>
@@ -112,14 +92,17 @@
       </section>
     </main>
     <mpr-footer
-      theme-switcher="toggle"
-      prefix-text="Pinguin by Marco Polo Research Lab"
-      links='[
-        { "label": "Terms of Service", "href": "/terms" }
-      ]'
-      privacy-link-label="Privacy Policy"
-      privacy-link-href="/privacy"
-      privacy-modal-content="<p>Pinguin protects every workspace with nonce-backed Google Identity, HttpOnly cookies, and TLS. Review our Privacy Policy for the full data handling breakdown.</p>"
+      id="pinguin-footer"
+      prefix-text="Built with mpr-ui"
+      privacy-link-label="Privacy &amp; Terms"
+      privacy-modal-content="
+        <h1>Privacy Policy — Pinguin</h1>
+        <p>This demo uses TAuth for authentication and stores session cookies locally.</p>
+        <p>No data is shared beyond the notifications needed for the demonstration.</p>
+      "
+      links-collection='{"style":"drop-up","text":"Explore","links":[{ "label": "Repository", "url": "https://github.com/tyemirov/pinguin" },{ "label": "mpr-ui docs", "url": "https://github.com/MarcoPoloResearchLab/mpr-ui" }]}'
+      theme-switcher="square"
+      theme-config='{"attribute":"data-palette","targets":["body"],"initialMode":"light","modes":[{"value":"sunrise","attributeValue":"light","classList":["theme-light"],"dataset":{"palette":"sunrise"}},{"value":"midnight","attributeValue":"dark","classList":["theme-dark"],"dataset":{"palette":"midnight"}}]}'
     ></mpr-footer>
     <script type="module" src="/js/bootstrap.js"></script>
   </body>

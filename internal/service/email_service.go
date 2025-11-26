@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net"
 	"net/smtp"
 	"strings"
@@ -26,6 +27,52 @@ type SMTPConfig struct {
 
 type EmailSender interface {
 	SendEmail(ctx context.Context, recipient string, subject string, message string, attachments []model.EmailAttachment) error
+}
+
+var (
+	dialTLSFunc = func(dialer *net.Dialer, network string, addr string, config *tls.Config) (net.Conn, error) {
+		return tls.DialWithDialer(dialer, network, addr, config)
+	}
+	newSMTPClient = func(conn net.Conn, host string) (smtpClient, error) {
+		client, err := smtp.NewClient(conn, host)
+		if err != nil {
+			return nil, err
+		}
+		return smtpClientWrapper{client: client}, nil
+	}
+	sendMailFunc = smtp.SendMail
+)
+
+type smtpClient interface {
+	Auth(smtp.Auth) error
+	Mail(string) error
+	Rcpt(string) error
+	Data() (io.WriteCloser, error)
+	Quit() error
+}
+
+type smtpClientWrapper struct {
+	client *smtp.Client
+}
+
+func (wrapper smtpClientWrapper) Auth(auth smtp.Auth) error {
+	return wrapper.client.Auth(auth)
+}
+
+func (wrapper smtpClientWrapper) Mail(address string) error {
+	return wrapper.client.Mail(address)
+}
+
+func (wrapper smtpClientWrapper) Rcpt(address string) error {
+	return wrapper.client.Rcpt(address)
+}
+
+func (wrapper smtpClientWrapper) Data() (io.WriteCloser, error) {
+	return wrapper.client.Data()
+}
+
+func (wrapper smtpClientWrapper) Quit() error {
+	return wrapper.client.Quit()
 }
 
 type SMTPEmailSender struct {
@@ -54,7 +101,7 @@ func (senderInstance *SMTPEmailSender) SendEmail(ctx context.Context, recipient 
 			Timeout: time.Duration(senderInstance.Config.Timeouts.ConnectionTimeoutSec) * time.Second,
 		}
 
-		tlsConnection, dialError := tls.DialWithDialer(dialer, "tcp", serverAddr, tlsConfig)
+		tlsConnection, dialError := dialTLSFunc(dialer, "tcp", serverAddr, tlsConfig)
 		if dialError != nil {
 			return fmt.Errorf("failed to dial TLS: %w", dialError)
 		}
@@ -64,7 +111,7 @@ func (senderInstance *SMTPEmailSender) SendEmail(ctx context.Context, recipient 
 			return ctx.Err()
 		}
 
-		smtpClient, clientError := smtp.NewClient(tlsConnection, senderInstance.Config.Host)
+		smtpClient, clientError := newSMTPClient(tlsConnection, senderInstance.Config.Host)
 		if clientError != nil {
 			return fmt.Errorf("failed to create SMTP client: %w", clientError)
 		}
@@ -100,7 +147,7 @@ func (senderInstance *SMTPEmailSender) SendEmail(ctx context.Context, recipient 
 
 	smtpAddress := net.JoinHostPort(senderInstance.Config.Host, senderInstance.Config.Port)
 	smtpAuth := smtp.PlainAuth("", senderInstance.Config.Username, senderInstance.Config.Password, senderInstance.Config.Host)
-	sendError := smtp.SendMail(smtpAddress, smtpAuth, senderInstance.Config.FromAddress, []string{recipient}, []byte(emailMessage))
+	sendError := sendMailFunc(smtpAddress, smtpAuth, senderInstance.Config.FromAddress, []string{recipient}, []byte(emailMessage))
 	if sendError != nil {
 		return fmt.Errorf("smtp send failed: %w", sendError)
 	}

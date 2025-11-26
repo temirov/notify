@@ -11,14 +11,19 @@
     <link rel="stylesheet" href="/assets/css/base.css" />
     <script defer src="/js/tauth-config.js"></script>
     <script defer src="/js/tauth-config-apply.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      defer
+      src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
-  <body data-page="dashboard" x-data="dashboardShell()">
+  <body data-page="dashboard" x-data="dashboardShell()" class="theme-light" data-palette="sunrise">
     <mpr-header
       id="pinguin-dashboard-header"
       brand-label="Pinguin"
       brand-href="/"
-      nav-links='[{"label":"Landing","href":"/index.html"}]'
+      nav-links='[{ "label": "Docs", "href": "https://github.com/tyemirov/pinguin" }]'
       site-id="991677581607-r0dj8q6irjagipali0jpca7nfp8sfj9r.apps.googleusercontent.com"
       base-url="http://localhost:8080"
       login-path="/auth/google"
@@ -146,14 +151,17 @@
       </section>
     </main>
     <mpr-footer
-      theme-switcher="toggle"
-      prefix-text="Pinguin by Marco Polo Research Lab"
-      links='[
-        { "label": "Terms of Service", "href": "/terms" }
-      ]'
-      privacy-link-label="Privacy Policy"
-      privacy-link-href="/privacy"
-      privacy-modal-content="<p>Pinguin protects every workspace with nonce-backed Google Identity, HttpOnly cookies, and TLS. Review our Privacy Policy for the full data handling breakdown.</p>"
+      id="dashboard-footer"
+      prefix-text="Built with mpr-ui"
+      privacy-link-label="Privacy &amp; Terms"
+      privacy-modal-content="
+        <h1>Privacy Policy — Pinguin</h1>
+        <p>This demo uses TAuth for authentication and stores session cookies locally.</p>
+        <p>No data is shared beyond the notifications needed for the demonstration.</p>
+      "
+      links-collection='{"style":"drop-up","text":"Explore","links":[{ "label": "Repository", "url": "https://github.com/tyemirov/pinguin" },{ "label": "mpr-ui docs", "url": "https://github.com/MarcoPoloResearchLab/mpr-ui" }]}'
+      theme-switcher="square"
+      theme-config='{"attribute":"data-palette","targets":["body"],"initialMode":"light","modes":[{"value":"sunrise","attributeValue":"light","classList":["theme-light"],"dataset":{"palette":"sunrise"}},{"value":"midnight","attributeValue":"dark","classList":["theme-dark"],"dataset":{"palette":"midnight"}}]}'
     ></mpr-footer>
     <div class="toast-center" x-data="toastCenter()" x-init="init()" aria-live="polite">
       <template x-for="toast in toasts" :key="toast.id">

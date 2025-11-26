@@ -10,7 +10,7 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 
 ## BugFixes (308–399)
 
-- [ ] [PG-309] There is no more google sign in button in the header. There must have been an intgeration tests to verify it.
+- [x] [PG-309] There is no more google sign in button in the header. There must have been an intgeration tests to verify it. — Restored `<mpr-login-button>` on landing/dashboard headers, re-seeded header attrs from tauth config, and reintroduced 14 Playwright scenarios that exercise Google/TAuth flows plus dashboard behaviors.
 
 ## Maintenance (400–499)
 
@@ -31,6 +31,7 @@ on:
 - [x] [PG-406] Move `proto/pinguin.proto` under `pkg/` (e.g., `pkg/proto/`) so all shared API artifacts live with exported packages. — the proto now resides at `pkg/proto/pinguin.proto`, and README references the new location.
 - [x] [PG-407] Relocate the CLI from `clients/cli` to `cmd/client`, fold it into the main module, and update documentation/build scripts accordingly. — CLI now lives under `cmd/client`, the standalone module was removed, and docs/tests reference the new path.
 - [x] [PG-408] Remove `go.work`/`go.work.sum` once the extra modules are gone so the repository is managed solely via the root `go.mod`. — deleted the workspace files and confirmed `go test ./...` runs without them.
+- [ ] [PG-410] Raise automated Go coverage to ≥95%. — Added regression tests for CLI config, logging helpers, generated proto/grpc bindings, the gRPC notification client, SMTP/Twilio senders, and retry dispatchers; repo-wide coverage climbed from 45% to 66.6%, but generated gRPC packages plus the server/service layers still drag the total below the target and require further investment.
 
 ## Planning
 *do not work on these, not ready*
