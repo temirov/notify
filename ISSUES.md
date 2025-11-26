@@ -32,3 +32,7 @@ on:
 
 ## Planning
 *do not work on these, not ready*
+
+- [ ] Redesign pinguin service for multi-tenancy
+1. remove the notion of an admin
+2. Add UI to register clients
