@@ -3,6 +3,7 @@ import {
   clickHeaderGoogleButton,
   configureRuntime,
   expectHeaderGoogleButton,
+  expectHeaderGoogleButtonTopRight,
   resetNotifications,
   stubExternalAssets,
 } from './utils';
@@ -21,6 +22,11 @@ test.describe('Landing page auth flow', () => {
     await page.goto('/index.html');
     await expect(page.getByTestId('landing-cta')).toBeVisible();
     await expectHeaderGoogleButton(page);
+  });
+
+  test('renders Google login button in top-right header slot', async ({ page }) => {
+    await page.goto('/index.html');
+    await expectHeaderGoogleButtonTopRight(page);
   });
 
   test('completes Google/TAuth handshake and redirects to dashboard', async ({ page }) => {

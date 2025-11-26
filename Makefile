@@ -10,7 +10,7 @@ INEFFASSIGN_MODULE := github.com/gordonklaus/ineffassign@latest
 SHORT_TIMEOUT := timeout -k 30s -s SIGKILL 30s
 LONG_TIMEOUT := timeout -k 350s -s SIGKILL 350s
 
-.PHONY: format check-format lint test test-unit test-integration test-fast test-slow build release ci
+.PHONY: format check-format lint test test-unit test-integration test-fast test-slow test-frontend build release ci
 
 format:
 	$(SHORT_TIMEOUT) gofmt -w $(GO_SOURCES)
@@ -50,6 +50,9 @@ test-integration: test-slow
 
 test: test-fast test-slow
 
+test-frontend:
+	$(LONG_TIMEOUT) npm test
+
 build:
 	mkdir -p bin
 	$(LONG_TIMEOUT) go build -o bin/$(RELEASE_BINARY_NAME) ./cmd/server
@@ -65,4 +68,4 @@ release:
 		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(LONG_TIMEOUT) go build -o $$output_path ./cmd/server; \
 	done
 
-ci: check-format lint test
+ci: check-format lint test test-frontend

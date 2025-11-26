@@ -5,6 +5,10 @@ import path from 'node:path';
 const projectRoot = path.resolve(__dirname, '..', '..');
 const mprUiScript = fs.readFileSync(path.join(projectRoot, 'tools/mpr-ui/mpr-ui.js'), 'utf-8');
 const mprUiStyles = fs.readFileSync(path.join(projectRoot, 'tools/mpr-ui/mpr-ui.css'), 'utf-8');
+const authClientStub = fs.readFileSync(
+  path.join(projectRoot, 'tests/support/stubs/auth-client.js'),
+  'utf-8',
+);
 
 export async function configureRuntime(page: Page, options: { authenticated: boolean }) {
   const baseUrl = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
@@ -33,6 +37,8 @@ export async function configureRuntime(page: Page, options: { authenticated: boo
         tauthBaseUrl: base,
         landingUrl: '/index.html',
         dashboardUrl: '/dashboard.html',
+        runtimeConfigUrl: '/runtime-config',
+        skipRemoteConfig: true,
       };
       window.__PINGUIN_RUNTIME_CONFIG_URL = '/runtime-config';
       const defaultProfile = {
@@ -69,7 +75,7 @@ export async function configureRuntime(page: Page, options: { authenticated: boo
   await page.addInitScript(({ base }) => {
     window.PINGUIN_TAUTH_CONFIG = {
       baseUrl: base,
-      googleClientId: 'playwright-client',
+      googleClientId: '991677581607-r0dj8q6irjagipali0jpca7nfp8sfj9r.apps.googleusercontent.com',
     };
   }, { base: baseUrl });
 }
@@ -121,6 +127,9 @@ export async function stubExternalAssets(page: Page) {
   await page.route('https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css', (route) =>
     route.fulfill({ contentType: 'text/css', body: mprUiStyles }),
   );
+  await page.route('**/static/auth-client.js', (route) =>
+    route.fulfill({ contentType: 'text/javascript', body: authClientStub }),
+  );
 }
 
 export async function resetNotifications(request: import('@playwright/test').APIRequestContext, overrides = {}) {
@@ -136,13 +145,36 @@ export async function expectToast(page: Page, text: string) {
 export async function expectHeaderGoogleButton(page: Page) {
   const header = page.locator('mpr-header');
   await expect(header).toBeVisible();
-  await expect(page.locator('mpr-login-button')).toHaveCount(0);
-  const wrapper = header.locator('[data-mpr-header="google-signin"]');
-  await expect(wrapper).toHaveCount(1);
-  await expect(wrapper).toHaveAttribute('data-mpr-google-ready', /true|loading/, { timeout: 10000 });
-  const button = wrapper.locator('[data-test="google-signin"]');
-  await expect(button).toHaveCount(1);
-  await expect(button.first()).toContainText(/sign/i);
+  const loginHost = page.locator('mpr-login-button').first();
+  await expect(loginHost).toBeVisible();
+  const siteId =
+    (await loginHost.getAttribute('site-id')) ||
+    (await header.first().getAttribute('site-id')) ||
+    '';
+  expect(siteId.trim(), 'login button missing site-id').not.toBe('');
+  await expect(loginHost).not.toHaveAttribute('data-mpr-google-error', /.+/);
+  const wrapper = loginHost.locator('[data-mpr-login="google-button"]');
+  await expect(wrapper).toHaveAttribute('data-mpr-google-site-id', /.+/, { timeout: 10000 });
+  const button = wrapper.locator('[data-test="google-signin"]').first();
+  await expect(button).toBeVisible();
+  await expect(button).toContainText(/sign/i);
+}
+
+export async function expectHeaderGoogleButtonTopRight(page: Page) {
+  await expectHeaderGoogleButton(page);
+  const header = page.locator('mpr-header').first();
+  const target = page.locator('mpr-login-button').first();
+  await expect(target).toBeVisible();
+  const headerBox = await header.boundingBox();
+  const buttonBox = await target.boundingBox();
+  if (!headerBox || !buttonBox) {
+    throw new Error('Unable to measure header login button');
+  }
+  const headerRight = headerBox.x + headerBox.width;
+  const buttonRight = buttonBox.x + buttonBox.width;
+  expect(buttonRight).toBeGreaterThan(headerBox.x + headerBox.width * 0.6);
+  expect(buttonRight).toBeLessThanOrEqual(headerRight + 2);
+  expect(buttonBox.y).toBeLessThanOrEqual(headerBox.y + headerBox.height * 0.6);
 }
 
 export async function clickHeaderGoogleButton(page: Page) {

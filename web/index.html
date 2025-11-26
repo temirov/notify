@@ -27,14 +27,25 @@
   </head>
   <body data-page="landing">
     <mpr-header
+      id="pinguin-header"
       brand-label="Pinguin"
       brand-href="/"
       nav-links='[{"label":"Docs","href":"#features"},{"label":"Status","href":"#status"}]'
-      theme-config='{"initialMode":"light"}'
+      site-id="991677581607-r0dj8q6irjagipali0jpca7nfp8sfj9r.apps.googleusercontent.com"
+      base-url="http://localhost:8080"
       login-path="/auth/google"
       logout-path="/auth/logout"
       nonce-path="/auth/nonce"
-    ></mpr-header>
+      settings-label="Account"
+      settings="true"
+    >
+      <mpr-login-button
+        slot="nav-right"
+        data-testid="header-login"
+        button-theme="filled_blue"
+        button-size="large"
+      ></mpr-login-button>
+    </mpr-header>
     <main>
       <section class="anchor-section hero" x-data="landingAuthPanel()" x-init="init()">
         <p class="eyebrow" id="features" x-text="STRINGS.landing.eyebrow"></p>
@@ -90,8 +101,12 @@
     <mpr-footer
       theme-switcher="toggle"
       prefix-text="Pinguin by Marco Polo Research Lab"
-      privacy-link-label="Security"
-      privacy-modal-content="<p>HttpOnly session cookies keep every operation locked to your browser.</p>"
+      links='[
+        { "label": "Terms of Service", "href": "/terms" }
+      ]'
+      privacy-link-label="Privacy Policy"
+      privacy-link-href="/privacy"
+      privacy-modal-content="<p>Pinguin protects every workspace with nonce-backed Google Identity, HttpOnly cookies, and TLS. Review our Privacy Policy for the full data handling breakdown.</p>"
     ></mpr-footer>
     <script type="module" src="/js/bootstrap.js"></script>
   </body>

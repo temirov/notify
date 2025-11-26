@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { configureRuntime, resetNotifications, stubExternalAssets, expectToast } from './utils';
+import {
+  configureRuntime,
+  resetNotifications,
+  stubExternalAssets,
+  expectToast,
+  expectHeaderGoogleButtonTopRight,
+} from './utils';
 
 test.describe('Dashboard', () => {
   test.beforeEach(async ({ page, request }) => {
@@ -12,6 +18,13 @@ test.describe('Dashboard', () => {
     await page.goto('/dashboard.html');
     await expect(page).toHaveURL(/\/index\.html$/);
     await expect(page.getByTestId('landing-cta')).toBeVisible();
+  });
+
+  test('shows a Google-powered login button in the header for guests', async ({ page }) => {
+    await configureRuntime(page, { authenticated: false });
+    await page.goto('/dashboard.html');
+    await expect(page).toHaveURL(/\/index\.html$/);
+    await expectHeaderGoogleButtonTopRight(page);
   });
 
   test('redirects after BroadcastChannel logout', async ({ page }) => {
