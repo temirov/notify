@@ -5,8 +5,8 @@ import (
 	"os"
 
 	"github.com/spf13/viper"
-	"github.com/temirov/pinguin/clients/cli/internal/command"
-	cliConfig "github.com/temirov/pinguin/clients/cli/internal/config"
+	"github.com/temirov/pinguin/cmd/client/internal/command"
+	cliConfig "github.com/temirov/pinguin/cmd/client/internal/config"
 	"github.com/temirov/pinguin/pkg/client"
 	"github.com/temirov/pinguin/pkg/logging"
 )

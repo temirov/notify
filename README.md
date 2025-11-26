@@ -297,13 +297,12 @@ By default, the server listens on port `50051`. The server initializes the SQLit
 
 ### Pinguin CLI
 
-The repository includes an interactive CLI at `clients/cli` built with Cobra and Viper. It lives in its own Go module so you can work on the server without pulling in extra binaries. To build or run it, switch into the module first:
+The repository includes an interactive CLI at `cmd/client` built with Cobra and Viper. It lives alongside the server so you can build it directly from the repository root:
 
 ```bash
-cd clients/cli
-go build -o pinguin-cli .
+go build -o pinguin-cli ./cmd/client
 # or run directly
-go run . send --help
+go run ./cmd/client send --help
 ```
 
 Configuration values are read from environment variables prefixed with `PINGUIN_`:
@@ -341,13 +340,12 @@ PINGUIN_GRPC_AUTH_TOKEN=my-secret-token \
   --attachment "/tmp/notes.txt::text/plain"
 ```
 
-### Command‑Line Client Test
+### Command-Line Client Test
 
-A lightweight client test application is available under `cmd/client_test`, also as its own Go module. This client wraps the gRPC calls and demonstrates sending a notification. To run the client test, use:
+A lightweight client test application lives under `tests/clientcli` (no extra module). This client wraps the gRPC calls and demonstrates sending a notification. To run the client test, use:
 
 ```bash
-cd cmd/client_test
-go run . \
+go run ./tests/clientcli \
   --to your-email@yourdomain.com \
   --subject "Test Email" \
   --message "Hello, world!" \
@@ -362,7 +360,7 @@ Notification sent successfully. Notification ID: notif-1741932356116855000
 
 ### Using grpcurl
 
-You can also use [grpcurl](https://github.com/fullstorydev/grpcurl) to interact directly with the gRPC API. For example, to send an email notification:
+You can also use [grpcurl](https://github.com/fullstorydev/grpcurl) to interact directly with the gRPC API. The canonical protobuf definition lives at `pkg/proto/pinguin.proto`. For example, to send an email notification:
 
 ```bash
 grpcurl -d '{
