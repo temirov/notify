@@ -175,7 +175,7 @@ func buildCORS(allowedOrigins []string) gin.HandlerFunc {
 	if len(allowedOrigins) == 0 {
 		cfg := cors.Config{
 			AllowAllOrigins:  true,
-			AllowHeaders:     []string{"Content-Type", "X-Requested-With"},
+			AllowHeaders:     []string{"Content-Type", "X-Requested-With", "X-Client-Data", "X-Client"},
 			AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodOptions},
 			AllowCredentials: false,
 		}
@@ -183,7 +183,7 @@ func buildCORS(allowedOrigins []string) gin.HandlerFunc {
 	}
 	cfg := cors.Config{
 		AllowOrigins:     allowedOrigins,
-		AllowHeaders:     []string{"Content-Type", "X-Requested-With"},
+		AllowHeaders:     []string{"Content-Type", "X-Requested-With", "X-Client-Data", "X-Client"},
 		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodOptions},
 		AllowCredentials: true,
 	}

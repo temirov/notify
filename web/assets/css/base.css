@@ -283,7 +283,17 @@ form label {
 }
 
 mpr-header [data-mpr-header="google-signin"] {
-  display: none !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  min-width: 220px;
+}
+
+mpr-header [data-mpr-header="google-signin"] [data-test="google-signin"],
+mpr-header [data-mpr-header="google-signin"] button {
+  min-width: 180px;
+  min-height: 40px;
 }
 
 .dashboard-header {

@@ -77,19 +77,6 @@ async function fetchRuntimeConfig(config, hint) {
   throw lastError || new Error('runtime_config_failed');
 }
 
-function loadAuthClient(baseUrl) {
-  const normalized = (baseUrl || '').replace(/\/$/, '') || DEFAULT_CONFIG.tauthBaseUrl;
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.defer = true;
-    script.crossOrigin = 'anonymous';
-    script.src = `${normalized}/static/auth-client.js`;
-    script.onload = () => resolve(true);
-    script.onerror = () => reject(new Error('auth_client_load_failed'));
-    document.head.appendChild(script);
-  });
-}
-
 function mergeConfig(base, overrides) {
   if (!overrides || typeof overrides !== 'object') {
     return { ...base };
@@ -129,10 +116,8 @@ function mergeConfig(base, overrides) {
   delete finalConfig.skipRemoteConfig;
   delete finalConfig.runtimeConfigUrl;
   window.__PINGUIN_CONFIG__ = finalConfig;
-  try {
-    await loadAuthClient(window.__PINGUIN_CONFIG__.tauthBaseUrl);
-  } catch (error) {
-    console.warn('auth client load failed', error);
+  if (typeof window.initAuthClient !== 'function') {
+    console.warn('auth-client.js has not finished loading; authentication may be delayed.');
   }
   await import('./app.js');
 })();

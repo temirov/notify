@@ -28,7 +28,6 @@ Alpine.start();
 
 function startApp() {
   bootstrapPage(sessionBridge);
-  ensureMprUiLoaded();
 }
 
 if (document.readyState === 'loading') {
@@ -286,15 +285,4 @@ function waitFor(checkFn, timeout = 12000) {
     };
     tick();
   });
-}
-
-function ensureMprUiLoaded() {
-  if (document.querySelector('script[data-mpr-ui="true"]')) {
-    return;
-  }
-  const script = document.createElement('script');
-  script.defer = true;
-  script.src = 'https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js';
-  script.dataset.mprUi = 'true';
-  document.head.appendChild(script);
 }

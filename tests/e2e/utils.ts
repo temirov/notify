@@ -109,7 +109,37 @@ export async function stubExternalAssets(page: Page) {
             },
             renderButton(el, options) {
               var label = (options && options.text) || "Sign in";
-              el.innerHTML = "<button class='button secondary'>" + label + "</button>";
+              var normalizedLabel = label.replace(/_/g, " ");
+              var host = el && typeof el.closest === "function"
+                ? el.closest('[data-mpr-header="google-signin"]')
+                : null;
+              if (host && host.style) {
+                host.style.display = "inline-flex";
+                host.style.alignItems = "center";
+                host.style.justifyContent = "flex-end";
+                host.style.minWidth = "220px";
+                host.style.minHeight = "44px";
+                host.style.gap = "0.5rem";
+              }
+              if (el && el.style) {
+                el.style.display = "flex";
+                el.style.alignItems = "center";
+                el.style.justifyContent = "center";
+                el.style.minWidth = "200px";
+                el.style.minHeight = "44px";
+              }
+              el.innerHTML =
+                "<button class='button secondary' style='" +
+                "display:flex;align-items:center;justify-content:center;" +
+                "gap:0.5rem;padding:0.65rem 1.1rem;border-radius:999px;" +
+                "border:1px solid var(--mpr-color-border, #cbd5f5);" +
+                "background:var(--mpr-color-surface-elevated, #fff);" +
+                "color:var(--mpr-color-text-primary, #0f172a);" +
+                "font-weight:600;font-size:0.95rem;min-width:180px;" +
+                "min-height:40px;box-shadow:0 2px 6px rgba(15,23,42,0.15);" +
+                "'>" +
+                normalizedLabel +
+                "</button>";
             },
             prompt() {},
           },
@@ -142,60 +172,127 @@ export async function expectToast(page: Page, text: string) {
   await expect(page.getByRole('button', { name: text }).first()).toBeVisible();
 }
 
+/**
+ * @param {Page} page
+ */
+async function waitForHeaderLoginButton(page: Page) {
+  await page.waitForFunction(() => {
+    const header = document.querySelector('mpr-header');
+    if (!header) {
+      return false;
+    }
+    const wrapper = header.querySelector('[data-mpr-header="google-signin"]');
+    if (!wrapper) {
+      return false;
+    }
+    const button =
+      wrapper.querySelector('[data-test="google-signin"]') ||
+      wrapper.querySelector('[role="button"]') ||
+      wrapper.querySelector('button');
+    if (!button) {
+      return false;
+    }
+    const rect = button.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }, undefined, { timeout: 15000 });
+}
+
+/**
+ * @typedef {{
+ *   buttonRect: { x: number; y: number; width: number; height: number; right: number };
+ *   headerRect: { x: number; y: number; width: number; height: number; right: number };
+ *   label: string;
+ * }} HeaderButtonMetrics
+ */
+
+/**
+ * @param {Page} page
+ * @returns {Promise<HeaderButtonMetrics | null>}
+ */
+async function getHeaderButtonMetrics(page: Page) {
+  return page.evaluate(() => {
+    const header = document.querySelector('mpr-header');
+    if (!header) {
+      return null;
+    }
+    const wrapper = header.querySelector('[data-mpr-header="google-signin"]');
+    if (!wrapper) {
+      return null;
+    }
+    const target =
+      wrapper.querySelector('[data-test="google-signin"]') ||
+      wrapper.querySelector('[role="button"]') ||
+      wrapper.querySelector('button');
+    if (!target) {
+      return null;
+    }
+    const buttonRect = target.getBoundingClientRect();
+    const headerRect = header.getBoundingClientRect();
+    return {
+      buttonRect: {
+        x: buttonRect.x,
+        y: buttonRect.y,
+        width: buttonRect.width,
+        height: buttonRect.height,
+        right: buttonRect.right,
+      },
+      headerRect: {
+        x: headerRect.x,
+        y: headerRect.y,
+        width: headerRect.width,
+        height: headerRect.height,
+        right: headerRect.right,
+      },
+      label: (target.textContent || '').trim(),
+    };
+  });
+}
+
 export async function expectHeaderGoogleButton(page: Page) {
-  const header = page.locator('mpr-header');
+  const header = page.locator('mpr-header').first();
   await expect(header).toBeVisible();
-  const loginHost = page.locator('mpr-login-button').first();
-  await expect(loginHost).toBeVisible();
-  const siteId =
-    (await loginHost.getAttribute('site-id')) ||
-    (await header.first().getAttribute('site-id')) ||
-    '';
+  const siteId = (await header.getAttribute('site-id')) || '';
   expect(siteId.trim(), 'login button missing site-id').not.toBe('');
-  await expect(loginHost).not.toHaveAttribute('data-mpr-google-error', /.+/);
-  const wrapper = loginHost.locator('[data-mpr-login="google-button"]');
-  await expect(wrapper).toHaveAttribute('data-mpr-google-site-id', /.+/, { timeout: 10000 });
-  const button = wrapper.locator('[data-test="google-signin"]').first();
-  await expect(button).toBeVisible();
-  await expect(button).toContainText(/sign/i);
+  await waitForHeaderLoginButton(page);
+  const metrics = await getHeaderButtonMetrics(page);
+  if (!metrics) {
+    throw new Error('Unable to locate Google button inside mpr-header');
+  }
+  expect(metrics.buttonRect.width).toBeGreaterThan(0);
+  expect(metrics.buttonRect.height).toBeGreaterThan(0);
+  expect(metrics.label.toLowerCase()).toContain('sign');
 }
 
 export async function expectHeaderGoogleButtonTopRight(page: Page) {
-  await expectHeaderGoogleButton(page);
-  const header = page.locator('mpr-header').first();
-  const target = page.locator('mpr-login-button').first();
-  await expect(target).toBeVisible();
-  const headerBox = await header.boundingBox();
-  const buttonBox = await target.boundingBox();
-  if (!headerBox || !buttonBox) {
+  await waitForHeaderLoginButton(page);
+  const metrics = await getHeaderButtonMetrics(page);
+  if (!metrics) {
     throw new Error('Unable to measure header login button');
   }
-  const headerRight = headerBox.x + headerBox.width;
-  const buttonRight = buttonBox.x + buttonBox.width;
-  expect(buttonRight).toBeGreaterThan(headerBox.x + headerBox.width * 0.6);
-  expect(buttonRight).toBeLessThanOrEqual(headerRight + 2);
-  expect(buttonBox.y).toBeLessThanOrEqual(headerBox.y + headerBox.height * 0.6);
+  const { headerRect, buttonRect } = metrics;
+  const headerRight = headerRect.x + headerRect.width;
+  expect(buttonRect.right).toBeGreaterThan(headerRect.x + headerRect.width * 0.6);
+  expect(buttonRect.right).toBeLessThanOrEqual(headerRight + 2);
+  expect(buttonRect.y).toBeLessThanOrEqual(headerRect.y + headerRect.height * 0.6);
 }
 
 export async function clickHeaderGoogleButton(page: Page) {
+  await waitForHeaderLoginButton(page);
   await page.evaluate(() => {
-    const externalHost = document.querySelector('mpr-login-button');
-    if (externalHost) {
-      const externalTarget =
-        externalHost.querySelector('[data-mpr-login="google-button"] button') ||
-        externalHost.querySelector('[data-mpr-login="google-button"] [role="button"]');
-      if (externalTarget && typeof externalTarget.click === 'function') {
-        externalTarget.click();
-        return;
-      }
-    }
     const header = document.querySelector('mpr-header');
-    if (!header) return;
+    if (!header) {
+      return;
+    }
+    const container = header.querySelector('[data-mpr-header="google-signin"]');
+    if (!container) {
+      return;
+    }
     const target =
-      header.querySelector('[data-mpr-header="google-signin"] [data-test="google-signin"]') ||
-      header.querySelector('[data-mpr-header="google-signin"] [role="button"]');
-    if (target && typeof (target as HTMLElement).click === 'function') {
-      (target as HTMLElement).click();
+      container.querySelector('[data-test="google-signin"]') ||
+      container.querySelector('[role="button"]') ||
+      container.querySelector('button');
+    if (target && typeof target.click === 'function') {
+      target.click();
     }
   });
 }

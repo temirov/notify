@@ -24,6 +24,11 @@
     <script defer src="/js/tauth-config.js"></script>
     <script defer src="/js/tauth-config-apply.js"></script>
     <script
+      defer
+      src="http://localhost:8081/static/auth-client.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
       id="mpr-ui-bundle"
       defer
       src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
@@ -43,17 +48,7 @@
       nonce-path="/auth/nonce"
       settings-label="Account"
       settings="true"
-    >
-      <mpr-login-button
-        slot="nav-right"
-        button-theme="filled_blue"
-        button-size="large"
-        data-testid="header-login"
-        login-path="/auth/google"
-        logout-path="/auth/logout"
-        nonce-path="/auth/nonce"
-      ></mpr-login-button>
-    </mpr-header>
+    ></mpr-header>
     <main>
       <section class="anchor-section hero" x-data="landingAuthPanel()" x-init="init()">
         <p class="eyebrow" id="features" x-text="STRINGS.landing.eyebrow"></p>
@@ -91,19 +86,20 @@
         </div>
       </section>
     </main>
+    <script type="module" src="/js/bootstrap.js"></script>
     <mpr-footer
       id="pinguin-footer"
-      prefix-text="Built with mpr-ui"
+      prefix-text="Pinguin Notification Service"
       privacy-link-label="Privacy &amp; Terms"
       privacy-modal-content="
         <h1>Privacy Policy — Pinguin</h1>
-        <p>This demo uses TAuth for authentication and stores session cookies locally.</p>
-        <p>No data is shared beyond the notifications needed for the demonstration.</p>
+        <p>Pinguin stores the notification drafts you create, recipient details, and delivery metadata solely to run the scheduling workspace.</p>
+        <p>Authentication happens through Google Sign-In; we issue HttpOnly session cookies and never store your password.</p>
+        <p>We do not sell or share notification content with third parties, and you may remove queued items from the dashboard at any time.</p>
       "
       links-collection='{"style":"drop-up","text":"Explore","links":[{ "label": "Repository", "url": "https://github.com/tyemirov/pinguin" },{ "label": "mpr-ui docs", "url": "https://github.com/MarcoPoloResearchLab/mpr-ui" }]}'
       theme-switcher="square"
       theme-config='{"attribute":"data-palette","targets":["body"],"initialMode":"light","modes":[{"value":"sunrise","attributeValue":"light","classList":["theme-light"],"dataset":{"palette":"sunrise"}},{"value":"midnight","attributeValue":"dark","classList":["theme-dark"],"dataset":{"palette":"midnight"}}]}'
     ></mpr-footer>
-    <script type="module" src="/js/bootstrap.js"></script>
   </body>
 </html>
