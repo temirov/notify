@@ -3,14 +3,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const projectRoot = path.resolve(__dirname, '..', '..');
-const mprUiScriptPath = path.join(projectRoot, 'tools/mpr-ui/mpr-ui.js');
-const mprUiStylesPath = path.join(projectRoot, 'tools/mpr-ui/mpr-ui.css');
-const mprUiScript = fs.existsSync(mprUiScriptPath)
-  ? fs.readFileSync(mprUiScriptPath, 'utf-8')
-  : null;
-const mprUiStyles = fs.existsSync(mprUiStylesPath)
-  ? fs.readFileSync(mprUiStylesPath, 'utf-8')
-  : null;
 const authClientStub = fs.readFileSync(
   path.join(projectRoot, 'tests/support/stubs/auth-client.js'),
   'utf-8',
@@ -156,20 +148,6 @@ export async function stubExternalAssets(page: Page) {
       contentType: 'text/javascript',
       body: googleStub,
     });
-  });
-  await page.route('https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js', (route) => {
-    if (mprUiScript) {
-      route.fulfill({ contentType: 'text/javascript', body: mprUiScript });
-      return;
-    }
-    route.fallback();
-  });
-  await page.route('https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css', (route) => {
-    if (mprUiStyles) {
-      route.fulfill({ contentType: 'text/css', body: mprUiStyles });
-      return;
-    }
-    route.fallback();
   });
   await page.route('**/static/auth-client.js', (route) =>
     route.fulfill({ contentType: 'text/javascript', body: authClientStub }),
