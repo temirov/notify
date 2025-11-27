@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -11,23 +11,46 @@
     <link rel="stylesheet" href="/assets/css/base.css" />
     <script defer src="/js/tauth-config.js"></script>
     <script defer src="/js/tauth-config-apply.js"></script>
+    <script
+      defer
+      src="http://localhost:8081/static/auth-client.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      id="mpr-ui-bundle"
+      defer
+      src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
-  <body data-page="dashboard" x-data="dashboardShell()">
+  <body
+    data-page="dashboard"
+    x-data="dashboardShell()"
+    class="theme-light"
+    data-palette="sunrise"
+  >
     <mpr-header
+      id="pinguin-dashboard-header"
       brand-label="Pinguin"
       brand-href="/"
-      nav-links='[{"label":"Landing","href":"/index.html"}]'
-      theme-config='{"initialMode":"light"}'
+      nav-links='[{ "label": "Docs", "href": "https://github.com/tyemirov/pinguin" }]'
+      site-id="991677581607-r0dj8q6irjagipali0jpca7nfp8sfj9r.apps.googleusercontent.com"
+      base-url="http://localhost:8080"
       login-path="/auth/google"
       logout-path="/auth/logout"
       nonce-path="/auth/nonce"
+      settings-label="Account"
+      settings="true"
     >
       <div slot="nav-right" class="profile-chip" data-testid="profile-chip">
-        <template x-if="$store.auth.profile && $store.auth.profile.user_avatar_url">
+        <template
+          x-if="$store.auth.profile && $store.auth.profile.user_avatar_url"
+        >
           <img :src="$store.auth.profile.user_avatar_url" alt="User avatar" />
         </template>
-        <span x-text="$store.auth.profile?.user_display_name || $store.auth.profile?.user_email || 'Guest'"></span>
+        <span
+          x-text="$store.auth.profile?.user_display_name || $store.auth.profile?.user_email || 'Guest'"
+        ></span>
       </div>
     </mpr-header>
     <main class="anchor-section">
@@ -37,11 +60,25 @@
           <p x-text="strings.subtitle"></p>
         </div>
         <div class="filters">
-          <button class="button secondary" type="button" x-on:click="refreshNotifications()" x-text="actions.refresh"></button>
-          <button class="button secondary" type="button" x-on:click="handleLogout()" x-text="actions.logout"></button>
+          <button
+            class="button secondary"
+            type="button"
+            x-on:click="refreshNotifications()"
+            x-text="actions.refresh"
+          ></button>
+          <button
+            class="button secondary"
+            type="button"
+            x-on:click="handleLogout()"
+            x-text="actions.logout"
+          ></button>
         </div>
       </header>
-    <section class="panel" x-data="notificationsTable()" data-testid="notifications-table">
+      <section
+        class="panel"
+        x-data="notificationsTable()"
+        data-testid="notifications-table"
+      >
         <div class="filters" style="margin-bottom: 1rem">
           <label style="flex: 1; min-width: 200px">
             <span>Filter by status</span>
@@ -51,7 +88,12 @@
               </template>
             </select>
           </label>
-          <button class="button secondary" type="button" x-on:click="loadNotifications()" x-text="actions.refresh"></button>
+          <button
+            class="button secondary"
+            type="button"
+            x-on:click="loadNotifications()"
+            x-text="actions.refresh"
+          ></button>
         </div>
         <template x-if="errorMessage">
           <p class="notice" data-variant="error" x-text="errorMessage"></p>
@@ -70,22 +112,37 @@
             <tbody>
               <template x-if="isLoading">
                 <tr>
-                  <td colspan="5" class="empty-state">Loading notifications…</td>
+                  <td colspan="5" class="empty-state">
+                    Loading notifications…
+                  </td>
                 </tr>
               </template>
               <template x-if="!isLoading && notifications.length === 0">
                 <tr>
-                  <td colspan="5" class="empty-state" x-text="strings.emptyState"></td>
+                  <td
+                    colspan="5"
+                    class="empty-state"
+                    x-text="strings.emptyState"
+                  ></td>
                 </tr>
               </template>
               <template x-for="item in notifications" :key="item.id">
                 <tr data-testid="notification-row">
                   <td>
-                    <strong x-text="item.subject || 'Untitled notification'"></strong>
-                    <p class="text-muted">Created <span x-text="formatTimestamp(item.createdAt)"></span></p>
+                    <strong
+                      x-text="item.subject || 'Untitled notification'"
+                    ></strong>
+                    <p class="text-muted">
+                      Created
+                      <span x-text="formatTimestamp(item.createdAt)"></span>
+                    </p>
                   </td>
                   <td>
-                    <span class="status-badge" :data-variant="item.status" x-text="formatStatus(item.status)"></span>
+                    <span
+                      class="status-badge"
+                      :data-variant="item.status"
+                      x-text="formatStatus(item.status)"
+                    ></span>
                   </td>
                   <td>
                     <span x-text="item.recipient"></span>
@@ -118,27 +175,42 @@
           <form class="dialog__body" x-on:submit.prevent="submitSchedule">
             <div>
               <h3 x-text="strings.scheduleDialogTitle"></h3>
-              <p class="text-muted" x-text="strings.scheduleDialogDescription"></p>
+              <p
+                class="text-muted"
+                x-text="strings.scheduleDialogDescription"
+              ></p>
             </div>
             <label>
               <span>Delivery time</span>
-              <input type="datetime-local" x-model="scheduleForm.scheduledTime" required />
+              <input
+                type="datetime-local"
+                x-model="scheduleForm.scheduledTime"
+                required
+              />
             </label>
             <div style="display: flex; gap: 0.75rem; justify-content: flex-end">
-              <button class="button secondary" type="button" x-on:click="closeScheduleDialog()" x-text="actions.close"></button>
-              <button class="button primary" type="submit" x-text="actions.saveChanges"></button>
+              <button
+                class="button secondary"
+                type="button"
+                x-on:click="closeScheduleDialog()"
+                x-text="actions.close"
+              ></button>
+              <button
+                class="button primary"
+                type="submit"
+                x-text="actions.saveChanges"
+              ></button>
             </div>
           </form>
         </dialog>
       </section>
     </main>
-    <mpr-footer
-      theme-switcher="toggle"
-      prefix-text="Pinguin by Marco Polo Research Lab"
-      privacy-link-label="Security"
-      privacy-modal-content="<p>HttpOnly session cookies keep every operation locked to your browser.</p>"
-    ></mpr-footer>
-    <div class="toast-center" x-data="toastCenter()" x-init="init()" aria-live="polite">
+    <div
+      class="toast-center"
+      x-data="toastCenter()"
+      x-init="init()"
+      aria-live="polite"
+    >
       <template x-for="toast in toasts" :key="toast.id">
         <button
           type="button"
@@ -150,5 +222,19 @@
       </template>
     </div>
     <script type="module" src="/js/bootstrap.js"></script>
+    <mpr-footer
+      id="dashboard-footer"
+      prefix-text="Pinguin Notification Service"
+      privacy-link-label="Privacy &amp; Terms"
+      privacy-modal-content="
+        <h1>Privacy Policy — Pinguin</h1>
+        <p>Pinguin stores the notification drafts you create, recipient details, and delivery metadata solely to run the scheduling workspace.</p>
+        <p>Authentication happens through Google Sign-In; we issue HttpOnly session cookies and never store your password.</p>
+        <p>We do not sell or share notification content with third parties, and you may remove queued items from the dashboard at any time.</p>
+      "
+      links-collection='{"style":"drop-up","text":"Explore","links":[{ "label": "Repository", "url": "https://github.com/tyemirov/pinguin" },{ "label": "mpr-ui docs", "url": "https://github.com/MarcoPoloResearchLab/mpr-ui" }]}'
+      theme-switcher="square"
+      theme-config='{"attribute":"data-palette","targets":["body"],"initialMode":"light","modes":[{"value":"sunrise","attributeValue":"light","classList":["theme-light"],"dataset":{"palette":"sunrise"}},{"value":"midnight","attributeValue":"dark","classList":["theme-dark"],"dataset":{"palette":"midnight"}}]}'
+    ></mpr-footer>
   </body>
 </html>

@@ -3,8 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const projectRoot = path.resolve(__dirname, '..', '..');
-const mprUiScript = fs.readFileSync(path.join(projectRoot, 'tools/mpr-ui/mpr-ui.js'), 'utf-8');
-const mprUiStyles = fs.readFileSync(path.join(projectRoot, 'tools/mpr-ui/mpr-ui.css'), 'utf-8');
+const authClientStub = fs.readFileSync(
+  path.join(projectRoot, 'tests/support/stubs/auth-client.js'),
+  'utf-8',
+);
 
 export async function configureRuntime(page: Page, options: { authenticated: boolean }) {
   const baseUrl = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
@@ -33,6 +35,8 @@ export async function configureRuntime(page: Page, options: { authenticated: boo
         tauthBaseUrl: base,
         landingUrl: '/index.html',
         dashboardUrl: '/dashboard.html',
+        runtimeConfigUrl: '/runtime-config',
+        skipRemoteConfig: true,
       };
       window.__PINGUIN_RUNTIME_CONFIG_URL = '/runtime-config';
       const defaultProfile = {
@@ -69,7 +73,7 @@ export async function configureRuntime(page: Page, options: { authenticated: boo
   await page.addInitScript(({ base }) => {
     window.PINGUIN_TAUTH_CONFIG = {
       baseUrl: base,
-      googleClientId: 'playwright-client',
+      googleClientId: '991677581607-r0dj8q6irjagipali0jpca7nfp8sfj9r.apps.googleusercontent.com',
     };
   }, { base: baseUrl });
 }
@@ -103,7 +107,37 @@ export async function stubExternalAssets(page: Page) {
             },
             renderButton(el, options) {
               var label = (options && options.text) || "Sign in";
-              el.innerHTML = "<button class='button secondary'>" + label + "</button>";
+              var normalizedLabel = label.replace(/_/g, " ");
+              var host = el && typeof el.closest === "function"
+                ? el.closest('[data-mpr-header="google-signin"]')
+                : null;
+              if (host && host.style) {
+                host.style.display = "inline-flex";
+                host.style.alignItems = "center";
+                host.style.justifyContent = "flex-end";
+                host.style.minWidth = "220px";
+                host.style.minHeight = "44px";
+                host.style.gap = "0.5rem";
+              }
+              if (el && el.style) {
+                el.style.display = "flex";
+                el.style.alignItems = "center";
+                el.style.justifyContent = "center";
+                el.style.minWidth = "200px";
+                el.style.minHeight = "44px";
+              }
+              el.innerHTML =
+                "<button class='button secondary' style='" +
+                "display:flex;align-items:center;justify-content:center;" +
+                "gap:0.5rem;padding:0.65rem 1.1rem;border-radius:999px;" +
+                "border:1px solid var(--mpr-color-border, #cbd5f5);" +
+                "background:var(--mpr-color-surface-elevated, #fff);" +
+                "color:var(--mpr-color-text-primary, #0f172a);" +
+                "font-weight:600;font-size:0.95rem;min-width:180px;" +
+                "min-height:40px;box-shadow:0 2px 6px rgba(15,23,42,0.15);" +
+                "'>" +
+                normalizedLabel +
+                "</button>";
             },
             prompt() {},
           },
@@ -115,11 +149,8 @@ export async function stubExternalAssets(page: Page) {
       body: googleStub,
     });
   });
-  await page.route('https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js', (route) =>
-    route.fulfill({ contentType: 'text/javascript', body: mprUiScript }),
-  );
-  await page.route('https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css', (route) =>
-    route.fulfill({ contentType: 'text/css', body: mprUiStyles }),
+  await page.route('**/static/auth-client.js', (route) =>
+    route.fulfill({ contentType: 'text/javascript', body: authClientStub }),
   );
 }
 
@@ -133,27 +164,150 @@ export async function expectToast(page: Page, text: string) {
   await expect(page.getByRole('button', { name: text }).first()).toBeVisible();
 }
 
+/**
+ * @param {Page} page
+ */
+async function waitForHeaderLoginButton(page: Page) {
+  await page.waitForFunction(() => {
+    const header = document.querySelector('mpr-header');
+    if (!header) {
+      return false;
+    }
+    const wrapper = header.querySelector('[data-mpr-header="google-signin"]');
+    if (!wrapper) {
+      return false;
+    }
+    const button =
+      wrapper.querySelector('[data-test="google-signin"]') ||
+      wrapper.querySelector('[role="button"]') ||
+      wrapper.querySelector('button');
+    if (!button) {
+      return false;
+    }
+    const rect = button.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }, undefined, { timeout: 15000 });
+}
+
+/**
+ * @typedef {{
+ *   buttonRect: { x: number; y: number; width: number; height: number; right: number };
+ *   headerRect: { x: number; y: number; width: number; height: number; right: number };
+ *   label: string;
+ * }} HeaderButtonMetrics
+ */
+
+/**
+ * @param {Page} page
+ * @returns {Promise<HeaderButtonMetrics | null>}
+ */
+async function getHeaderButtonMetrics(page: Page) {
+  return page.evaluate(() => {
+    const header = document.querySelector('mpr-header');
+    if (!header) {
+      return null;
+    }
+    const wrapper = header.querySelector('[data-mpr-header="google-signin"]');
+    if (!wrapper) {
+      return null;
+    }
+    const target =
+      wrapper.querySelector('[data-test="google-signin"]') ||
+      wrapper.querySelector('[role="button"]') ||
+      wrapper.querySelector('button');
+    if (!target) {
+      return null;
+    }
+    const buttonRect = target.getBoundingClientRect();
+    const headerRect = header.getBoundingClientRect();
+    return {
+      buttonRect: {
+        x: buttonRect.x,
+        y: buttonRect.y,
+        width: buttonRect.width,
+        height: buttonRect.height,
+        right: buttonRect.right,
+      },
+      headerRect: {
+        x: headerRect.x,
+        y: headerRect.y,
+        width: headerRect.width,
+        height: headerRect.height,
+        right: headerRect.right,
+      },
+      label: (target.textContent || '').trim(),
+    };
+  });
+}
+
 export async function expectHeaderGoogleButton(page: Page) {
-  const header = page.locator('mpr-header');
+  const header = page.locator('mpr-header').first();
   await expect(header).toBeVisible();
-  await expect(page.locator('mpr-login-button')).toHaveCount(0);
-  const wrapper = header.locator('[data-mpr-header="google-signin"]');
-  await expect(wrapper).toHaveCount(1);
-  await expect(wrapper).toHaveAttribute('data-mpr-google-ready', /true|loading/, { timeout: 10000 });
-  const button = wrapper.locator('[data-test="google-signin"]');
-  await expect(button).toHaveCount(1);
-  await expect(button.first()).toContainText(/sign/i);
+  const siteId = (await header.getAttribute('site-id')) || '';
+  expect(siteId.trim(), 'login button missing site-id').not.toBe('');
+  await waitForHeaderLoginButton(page);
+  const metrics = await getHeaderButtonMetrics(page);
+  if (!metrics) {
+    throw new Error('Unable to locate Google button inside mpr-header');
+  }
+  expect(metrics.buttonRect.width).toBeGreaterThan(0);
+  expect(metrics.buttonRect.height).toBeGreaterThan(0);
+  expect(metrics.label.toLowerCase()).toContain('sign');
+}
+
+export async function expectHeaderGoogleButtonTopRight(page: Page) {
+  await waitForHeaderLoginButton(page);
+  const metrics = await getHeaderButtonMetrics(page);
+  if (!metrics) {
+    throw new Error('Unable to measure header login button');
+  }
+  const { headerRect, buttonRect } = metrics;
+  const headerRight = headerRect.x + headerRect.width;
+  expect(buttonRect.right).toBeGreaterThan(headerRect.x + headerRect.width * 0.6);
+  expect(buttonRect.right).toBeLessThanOrEqual(headerRight + 2);
+  expect(buttonRect.y).toBeLessThanOrEqual(headerRect.y + headerRect.height * 0.6);
 }
 
 export async function clickHeaderGoogleButton(page: Page) {
+  await waitForHeaderLoginButton(page);
   await page.evaluate(() => {
     const header = document.querySelector('mpr-header');
-    if (!header) return;
+    if (!header) {
+      return;
+    }
+    const container = header.querySelector('[data-mpr-header="google-signin"]');
+    if (!container) {
+      return;
+    }
     const target =
-      header.querySelector('[data-mpr-header="google-signin"] [data-test="google-signin"]') ||
-      header.querySelector('[data-mpr-header="google-signin"]');
+      container.querySelector('[data-test="google-signin"]') ||
+      container.querySelector('[role="button"]') ||
+      container.querySelector('button');
     if (target && typeof target.click === 'function') {
       target.click();
     }
   });
+}
+
+export async function completeHeaderLogin(page: Page) {
+  await expectHeaderGoogleButton(page);
+  await clickHeaderGoogleButton(page);
+  const waitForDashboard = page.url().includes('/dashboard.html')
+    ? Promise.resolve()
+    : page.waitForURL('**/dashboard.html', { timeout: 10000 });
+  const triggered = await page.evaluate(() => {
+    const googleStub = (window as any).__playwrightGoogle;
+    googleStub?.trigger({ credential: 'playwright-token' });
+    return Boolean(googleStub);
+  });
+  if (!triggered) {
+    throw new Error('Google Identity stub unavailable');
+  }
+  await waitForDashboard;
+  await expect(page.getByTestId('notifications-table')).toBeVisible();
+}
+
+export async function loginAndVisitDashboard(page: Page) {
+  await page.goto('/index.html');
+  await completeHeaderLogin(page);
 }

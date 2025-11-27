@@ -155,6 +155,8 @@ func (clientInstance *NotificationClient) GetNotificationStatus(notificationID s
 	return resp, nil
 }
 
+var sendPollInterval = 2 * time.Second
+
 // SendNotificationAndWait issues a SendNotification RPC and polls for its
 // terminal status until it is either sent, fails, or the client's timeout
 // elapses.
@@ -167,7 +169,6 @@ func (clientInstance *NotificationClient) SendNotificationAndWait(req *grpcapi.N
 		clientInstance.logger.Error("SendNotification failed", "error", err)
 		return nil, err
 	}
-	const pollInterval = 2 * time.Second
 	pollTimeout := clientInstance.settings.OperationTimeout()
 	startTime := time.Now()
 
@@ -183,7 +184,7 @@ func (clientInstance *NotificationClient) SendNotificationAndWait(req *grpcapi.N
 			return resp, fmt.Errorf("timeout waiting for notification to be sent")
 		}
 
-		time.Sleep(pollInterval)
+		time.Sleep(sendPollInterval)
 		statusResp, statusErr := clientInstance.GetNotificationStatus(resp.NotificationId)
 		if statusErr != nil {
 			clientInstance.logger.Error("GetNotificationStatus failed", "notificationID", resp.NotificationId, "error", statusErr)

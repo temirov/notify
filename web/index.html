@@ -23,17 +23,31 @@
     <link rel="stylesheet" href="/assets/css/base.css" />
     <script defer src="/js/tauth-config.js"></script>
     <script defer src="/js/tauth-config-apply.js"></script>
+    <script
+      defer
+      src="http://localhost:8081/static/auth-client.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      id="mpr-ui-bundle"
+      defer
+      src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
-  <body data-page="landing">
+  <body data-page="landing" class="theme-light" data-palette="sunrise">
     <mpr-header
+      id="pinguin-header"
       brand-label="Pinguin"
       brand-href="/"
-      nav-links='[{"label":"Docs","href":"#features"},{"label":"Status","href":"#status"}]'
-      theme-config='{"initialMode":"light"}'
+      nav-links='[{ "label": "Docs", "href": "https://github.com/tyemirov/pinguin" }]'
+      site-id="991677581607-r0dj8q6irjagipali0jpca7nfp8sfj9r.apps.googleusercontent.com"
+      base-url="http://localhost:8080"
       login-path="/auth/google"
       logout-path="/auth/logout"
       nonce-path="/auth/nonce"
+      settings-label="Account"
+      settings="true"
     ></mpr-header>
     <main>
       <section class="anchor-section hero" x-data="landingAuthPanel()" x-init="init()">
@@ -43,22 +57,7 @@
         <div class="panel" aria-live="polite">
           <p class="notice" x-text="notice"></p>
           <div class="cta-stack">
-            <button
-              class="button primary"
-              type="button"
-              data-testid="landing-cta"
-              x-on:click="
-                (() => {
-                  const host = document.querySelector('mpr-header');
-                  const root = host && host.shadowRoot;
-                  if (!root) return;
-                  const target =
-                    root.querySelector('[data-mpr-header=\'google-signin\'] button') ||
-                    root.querySelector('[data-mpr-header=\'google-signin\'] [role=\'button\']');
-                  target && target.click();
-                })()
-              "
-            >
+            <button class="button primary" type="button" data-testid="landing-cta" x-on:click="$dispatch('mpr-ui:auth:login')">
               Enter workspace
             </button>
             <p class="small" style="margin-top: 0.5rem" x-text="STRINGS.landing.securityCopy"></p>
@@ -87,12 +86,20 @@
         </div>
       </section>
     </main>
-    <mpr-footer
-      theme-switcher="toggle"
-      prefix-text="Pinguin by Marco Polo Research Lab"
-      privacy-link-label="Security"
-      privacy-modal-content="<p>HttpOnly session cookies keep every operation locked to your browser.</p>"
-    ></mpr-footer>
     <script type="module" src="/js/bootstrap.js"></script>
+    <mpr-footer
+      id="pinguin-footer"
+      prefix-text="Pinguin Notification Service"
+      privacy-link-label="Privacy &amp; Terms"
+      privacy-modal-content="
+        <h1>Privacy Policy — Pinguin</h1>
+        <p>Pinguin stores the notification drafts you create, recipient details, and delivery metadata solely to run the scheduling workspace.</p>
+        <p>Authentication happens through Google Sign-In; we issue HttpOnly session cookies and never store your password.</p>
+        <p>We do not sell or share notification content with third parties, and you may remove queued items from the dashboard at any time.</p>
+      "
+      links-collection='{"style":"drop-up","text":"Explore","links":[{ "label": "Repository", "url": "https://github.com/tyemirov/pinguin" },{ "label": "mpr-ui docs", "url": "https://github.com/MarcoPoloResearchLab/mpr-ui" }]}'
+      theme-switcher="square"
+      theme-config='{"attribute":"data-palette","targets":["body"],"initialMode":"light","modes":[{"value":"sunrise","attributeValue":"light","classList":["theme-light"],"dataset":{"palette":"sunrise"}},{"value":"midnight","attributeValue":"dark","classList":["theme-dark"],"dataset":{"palette":"midnight"}}]}'
+    ></mpr-footer>
   </body>
 </html>

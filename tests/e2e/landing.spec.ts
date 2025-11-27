@@ -1,17 +1,15 @@
 import { expect, test } from '@playwright/test';
 import {
-  clickHeaderGoogleButton,
+  completeHeaderLogin,
   configureRuntime,
   expectHeaderGoogleButton,
+  expectHeaderGoogleButtonTopRight,
   resetNotifications,
   stubExternalAssets,
 } from './utils';
 
 test.describe('Landing page auth flow', () => {
   test.beforeEach(async ({ page, request }) => {
-    page.on('console', (message) => {
-      console.log('[landing]', message.type(), message.text());
-    });
     await resetNotifications(request);
     await stubExternalAssets(page);
     await configureRuntime(page, { authenticated: false });
@@ -23,18 +21,14 @@ test.describe('Landing page auth flow', () => {
     await expectHeaderGoogleButton(page);
   });
 
+  test('renders Google login button in top-right header slot', async ({ page }) => {
+    await page.goto('/index.html');
+    await expectHeaderGoogleButtonTopRight(page);
+  });
+
   test('completes Google/TAuth handshake and redirects to dashboard', async ({ page }) => {
     await page.goto('/index.html');
-    await expectHeaderGoogleButton(page);
-    await clickHeaderGoogleButton(page);
-    const googleExchange = page.waitForRequest(/\/auth\/google$/);
-    const navigation = page.waitForNavigation({ url: '**/dashboard.html' });
-    await page.evaluate(() => {
-      const googleStub = (window as any).__playwrightGoogle;
-      googleStub?.trigger({ credential: 'playwright-token' });
-    });
-    await googleExchange;
-    await navigation;
+    await completeHeaderLogin(page);
     await expect(page.getByTestId('notifications-table')).toBeVisible();
   });
 

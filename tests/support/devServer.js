@@ -2,6 +2,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const HOST = '127.0.0.1';
 const PORT = process.env.PLAYWRIGHT_PORT ? Number(process.env.PLAYWRIGHT_PORT) : 4173;
@@ -14,6 +15,8 @@ const runtimeConfig = {
 };
 
 let serverState = createDefaultState();
+const nonceStore = new Map();
+const NONCE_TTL_MS = 2 * 60 * 1000;
 
 function createDefaultState() {
   return {
@@ -54,6 +57,7 @@ function applyOverrides(payload) {
   serverState.failList = Boolean(payload.failList);
   serverState.failReschedule = Boolean(payload.failReschedule);
   serverState.failCancel = Boolean(payload.failCancel);
+  nonceStore.clear();
 }
 
 function readJson(req) {
@@ -164,12 +168,28 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url.pathname === '/auth/nonce' && req.method === 'POST') {
-    sendJson(res, 200, { nonce: Date.now().toString() });
+    const token = issueNonce();
+    sendJson(res, 200, { nonce: token });
     return;
   }
 
   if (url.pathname === '/auth/google' && req.method === 'POST') {
-    sendJson(res, 200, { ok: true });
+    const body = await readJson(req);
+    if (!body || typeof body.google_id_token !== 'string' || !body.google_id_token.trim()) {
+      sendJson(res, 400, { error: 'invalid_google_token' });
+      return;
+    }
+    const nonceToken = typeof body.nonce_token === 'string' ? body.nonce_token.trim() : '';
+    if (!consumeNonce(nonceToken)) {
+      sendJson(res, 401, { error: 'invalid_nonce' });
+      return;
+    }
+    sendJson(res, 200, {
+      profile: {
+        user_email: 'playwright@example.com',
+        user_display_name: 'Playwright User',
+      },
+    });
     return;
   }
 
@@ -192,6 +212,42 @@ const server = http.createServer(async (req, res) => {
   const filePath = path.join(WEB_ROOT, safePath);
   serveStatic(filePath, res);
 });
+
+function issueNonce() {
+  const token = crypto.randomBytes(16).toString('hex');
+  nonceStore.set(token, Date.now() + NONCE_TTL_MS);
+  return token;
+}
+
+function consumeNonce(token) {
+  if (!token) {
+    return false;
+  }
+  const expiry = nonceStore.get(token);
+  if (!expiry) {
+    purgeNonces();
+    return false;
+  }
+  nonceStore.delete(token);
+  if (Date.now() > expiry) {
+    purgeNonces();
+    return false;
+  }
+  purgeNonces();
+  return true;
+}
+
+function purgeNonces() {
+  if (!nonceStore.size) {
+    return;
+  }
+  const now = Date.now();
+  for (const [token, expiry] of nonceStore.entries()) {
+    if (now > expiry) {
+      nonceStore.delete(token);
+    }
+  }
+}
 
 function filterNotifications(source, statuses) {
   if (!Array.isArray(source) || source.length === 0) {

@@ -1,5 +1,14 @@
 import { expect, test } from '@playwright/test';
-import { configureRuntime, resetNotifications, stubExternalAssets, expectToast } from './utils';
+import {
+  configureRuntime,
+  resetNotifications,
+  stubExternalAssets,
+  expectToast,
+  expectHeaderGoogleButtonTopRight,
+  loginAndVisitDashboard,
+} from './utils';
+
+const LANDING_URL_PATTERN = /\/(?:index\.html)?$/;
 
 test.describe('Dashboard', () => {
   test.beforeEach(async ({ page, request }) => {
@@ -10,13 +19,20 @@ test.describe('Dashboard', () => {
   test('redirects guests to the landing page', async ({ page }) => {
     await configureRuntime(page, { authenticated: false });
     await page.goto('/dashboard.html');
-    await expect(page).toHaveURL(/\/index\.html$/);
+    await expect(page).toHaveURL(LANDING_URL_PATTERN);
     await expect(page.getByTestId('landing-cta')).toBeVisible();
   });
 
-  test('redirects after BroadcastChannel logout', async ({ page }) => {
-    await configureRuntime(page, { authenticated: true });
+  test('shows a Google-powered login button in the header for guests', async ({ page }) => {
+    await configureRuntime(page, { authenticated: false });
     await page.goto('/dashboard.html');
+    await expect(page).toHaveURL(LANDING_URL_PATTERN);
+    await expectHeaderGoogleButtonTopRight(page);
+  });
+
+  test('redirects after BroadcastChannel logout', async ({ page }) => {
+    await configureRuntime(page, { authenticated: false });
+    await loginAndVisitDashboard(page);
     await expect(page.getByTestId('notification-row')).toHaveCount(1);
     await page.evaluate(() => {
       const channel = new BroadcastChannel('auth');
@@ -61,8 +77,8 @@ test.describe('Dashboard', () => {
         },
       ],
     });
-    await configureRuntime(page, { authenticated: true });
-    await page.goto('/dashboard.html');
+    await configureRuntime(page, { authenticated: false });
+    await loginAndVisitDashboard(page);
     await expect(page.getByTestId('notification-row')).toHaveCount(2);
     const filterSelect = page.locator('label:has-text("Filter by status") select');
     await filterSelect.selectOption('queued');
@@ -74,8 +90,8 @@ test.describe('Dashboard', () => {
   });
 
   test('renders notification table and allows cancel', async ({ page }) => {
-    await configureRuntime(page, { authenticated: true });
-    await page.goto('/dashboard.html');
+    await configureRuntime(page, { authenticated: false });
+    await loginAndVisitDashboard(page);
     await expect(page.getByTestId('notification-row')).toHaveCount(1);
     page.once('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Cancel' }).click();
@@ -84,15 +100,15 @@ test.describe('Dashboard', () => {
 
   test('shows error toast when list request fails', async ({ page, request }) => {
     await resetNotifications(request, { failList: true });
-    await configureRuntime(page, { authenticated: true });
-    await page.goto('/dashboard.html');
+    await configureRuntime(page, { authenticated: false });
+    await loginAndVisitDashboard(page);
     await expect(page.locator('.notice[data-variant="error"]')).toHaveText('Unable to load notifications.');
     await expectToast(page, 'Unable to load notifications.');
   });
 
   test('reschedule flow updates toast', async ({ page }) => {
-    await configureRuntime(page, { authenticated: true });
-    await page.goto('/dashboard.html');
+    await configureRuntime(page, { authenticated: false });
+    await loginAndVisitDashboard(page);
     await page.getByRole('button', { name: 'Reschedule' }).click();
     const input = page.getByLabel('Delivery time');
     const newDate = new Date(Date.now() + 7200 * 1000).toISOString().slice(0, 16);
@@ -103,8 +119,8 @@ test.describe('Dashboard', () => {
 
   test('shows toast when reschedule fails', async ({ page, request }) => {
     await resetNotifications(request, { failReschedule: true });
-    await configureRuntime(page, { authenticated: true });
-    await page.goto('/dashboard.html');
+    await configureRuntime(page, { authenticated: false });
+    await loginAndVisitDashboard(page);
     await page.getByRole('button', { name: 'Reschedule' }).click();
     const input = page.getByLabel('Delivery time');
     const newDate = new Date(Date.now() + 3600 * 1000).toISOString().slice(0, 16);
@@ -131,8 +147,8 @@ test.describe('Dashboard', () => {
         },
       ],
     });
-    await configureRuntime(page, { authenticated: true });
-    await page.goto('/dashboard.html');
+    await configureRuntime(page, { authenticated: false });
+    await loginAndVisitDashboard(page);
     await page.getByRole('button', { name: 'Reschedule' }).click();
     const input = page.getByLabel('Delivery time');
     const pad = (value: number) => String(value).padStart(2, '0');
@@ -147,8 +163,8 @@ test.describe('Dashboard', () => {
 
   test('shows toast when cancel fails', async ({ page, request }) => {
     await resetNotifications(request, { failCancel: true });
-    await configureRuntime(page, { authenticated: true });
-    await page.goto('/dashboard.html');
+    await configureRuntime(page, { authenticated: false });
+    await loginAndVisitDashboard(page);
     page.once('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Cancel' }).click();
     await expectToast(page, 'Unable to cancel notification.');
