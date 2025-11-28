@@ -46,6 +46,7 @@ func TestLoadConfig(t *testing.T) {
 		errorSubstring string
 		expectedConfig Config
 		assert         func(t *testing.T, cfg Config)
+		disableWeb     bool
 	}{
 		{
 			name: "AllVariablesPresent",
@@ -58,6 +59,7 @@ func TestLoadConfig(t *testing.T) {
 				LogLevel:             "INFO",
 				MaxRetries:           5,
 				RetryIntervalSec:     4,
+				WebInterfaceEnabled:  true,
 				HTTPListenAddr:       ":8080",
 				HTTPStaticRoot:       "web",
 				HTTPAllowedOrigins:   []string{"https://app.local", "https://alt.local"},
@@ -101,6 +103,7 @@ func TestLoadConfig(t *testing.T) {
 				LogLevel:             "INFO",
 				MaxRetries:           5,
 				RetryIntervalSec:     4,
+				WebInterfaceEnabled:  true,
 				HTTPListenAddr:       ":8080",
 				HTTPStaticRoot:       defaultHTTPStaticRoot,
 				HTTPAllowedOrigins:   []string{"https://app.local", "https://alt.local"},
@@ -169,6 +172,7 @@ func TestLoadConfig(t *testing.T) {
 				LogLevel:             "INFO",
 				MaxRetries:           5,
 				RetryIntervalSec:     4,
+				WebInterfaceEnabled:  true,
 				HTTPListenAddr:       ":8080",
 				HTTPStaticRoot:       "web",
 				HTTPAllowedOrigins:   []string{"https://app.local", "https://alt.local"},
@@ -206,6 +210,74 @@ func TestLoadConfig(t *testing.T) {
 			expectError:    true,
 			errorSubstring: "missing admin emails",
 		},
+		{
+			name: "DisableWebViaFlagSkipsHTTPRequirements",
+			mutateEnv: func(t *testing.T) {
+				var trimmed []envEntry
+				for _, entry := range completeEnvironment {
+					switch entry.key {
+					case "HTTP_LISTEN_ADDR", "HTTP_STATIC_ROOT", "HTTP_ALLOWED_ORIGINS", "ADMINS", "TAUTH_SIGNING_KEY", "TAUTH_ISSUER", "TAUTH_COOKIE_NAME":
+						continue
+					default:
+						trimmed = append(trimmed, entry)
+					}
+				}
+				setEnvironment(t, trimmed)
+			},
+			disableWeb: true,
+			expectedConfig: Config{
+				DatabasePath:         "test.db",
+				GRPCAuthToken:        "unit-token",
+				LogLevel:             "INFO",
+				MaxRetries:           5,
+				RetryIntervalSec:     4,
+				WebInterfaceEnabled:  false,
+				SMTPUsername:         "apikey",
+				SMTPPassword:         "secret",
+				SMTPHost:             "smtp.test",
+				SMTPPort:             587,
+				FromEmail:            "noreply@test",
+				TwilioAccountSID:     "sid",
+				TwilioAuthToken:      "auth",
+				TwilioFromNumber:     "+10000000000",
+				ConnectionTimeoutSec: 3,
+				OperationTimeoutSec:  7,
+			},
+		},
+		{
+			name: "DisableWebViaEnvSkipsHTTPRequirements",
+			mutateEnv: func(t *testing.T) {
+				var trimmed []envEntry
+				for _, entry := range completeEnvironment {
+					switch entry.key {
+					case "HTTP_LISTEN_ADDR", "HTTP_STATIC_ROOT", "HTTP_ALLOWED_ORIGINS", "ADMINS", "TAUTH_SIGNING_KEY", "TAUTH_ISSUER", "TAUTH_COOKIE_NAME":
+						continue
+					default:
+						trimmed = append(trimmed, entry)
+					}
+				}
+				trimmed = append(trimmed, envEntry{key: "DISABLE_WEB_INTERFACE", value: "true"})
+				setEnvironment(t, trimmed)
+			},
+			expectedConfig: Config{
+				DatabasePath:         "test.db",
+				GRPCAuthToken:        "unit-token",
+				LogLevel:             "INFO",
+				MaxRetries:           5,
+				RetryIntervalSec:     4,
+				WebInterfaceEnabled:  false,
+				SMTPUsername:         "apikey",
+				SMTPPassword:         "secret",
+				SMTPHost:             "smtp.test",
+				SMTPPort:             587,
+				FromEmail:            "noreply@test",
+				TwilioAccountSID:     "sid",
+				TwilioAuthToken:      "auth",
+				TwilioFromNumber:     "+10000000000",
+				ConnectionTimeoutSec: 3,
+				OperationTimeoutSec:  7,
+			},
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -213,7 +285,7 @@ func TestLoadConfig(t *testing.T) {
 			t.Helper()
 			testCase.mutateEnv(t)
 
-			loadedConfig, loadError := LoadConfig()
+			loadedConfig, loadError := LoadConfig(testCase.disableWeb)
 			if testCase.expectError {
 				if loadError == nil {
 					t.Fatalf("expected error")
@@ -252,6 +324,7 @@ func assertConfigEquals(t *testing.T, actual Config, expected Config) {
 		actual.LogLevel != expected.LogLevel ||
 		actual.MaxRetries != expected.MaxRetries ||
 		actual.RetryIntervalSec != expected.RetryIntervalSec ||
+		actual.WebInterfaceEnabled != expected.WebInterfaceEnabled ||
 		actual.HTTPListenAddr != expected.HTTPListenAddr ||
 		actual.HTTPStaticRoot != expected.HTTPStaticRoot ||
 		actual.TAuthSigningKey != expected.TAuthSigningKey ||
