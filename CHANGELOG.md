@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added the `--disable-web-interface` flag (and matching `DISABLE_WEB_INTERFACE` env var) so operators can run gRPC-only deployments without configuring ADMINS/TAuth/Google web settings (PG-103).
 - Added a regression test that asserts the `third_party` directory stays absent so we continue relying solely on upstream modules for TAuth and google protos (PG-405).
 - Relocated `pinguin.proto` to `pkg/proto/pinguin.proto` so consumer-facing definitions live under the exported packages and documented the new path (PG-406).
 - Moved the Cobra CLI into `cmd/client`, removed the extra module/go.work entry, and updated build/docs/tests to reference the unified binary (PG-407).

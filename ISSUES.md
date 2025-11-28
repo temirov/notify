@@ -6,7 +6,7 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 
 ## Features  (102–199)
 
-- [ ] [PG-103] add a flag (matched by an enviornment variables) that disables web interface. when the web interface is dsiabled it doesnt chech for the environment variables/flags required for web-interface functioning, such as ADMINS, GOOGLE_CLIENT_ID, HTTP_LISTEN_ADDR, HTTP_ALLOWED_ORIGINS, HTTP_STATIC_ROOT
+- [x] [PG-103] add a flag (matched by an enviornment variables) that disables web interface. when the web interface is dsiabled it doesnt chech for the environment variables/flags required for web-interface functioning, such as ADMINS, GOOGLE_CLIENT_ID, HTTP_LISTEN_ADDR, HTTP_ALLOWED_ORIGINS, HTTP_STATIC_ROOT — Added the `--disable-web-interface` flag and `DISABLE_WEB_INTERFACE` env to skip HTTP/TAuth/Google config so Pinguin can run gRPC-only without those variables.
 
 - [ ] [PG-104] deliver a detailed technical plan to make pinguin multitenant (allowing serving multiple clients from different domains)
 

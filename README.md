@@ -110,6 +110,8 @@ Pinguin is configured via environment variables. Create a `.env` file or export 
   Filesystem path that holds the `/web` assets served to browsers (defaults to `/web` when unset; docker-compose mounts the same path).
 - **HTTP_ALLOWED_ORIGINS:**  
   Comma-separated list of origins allowed to call the JSON API when running cross-origin (leave empty to allow same-origin only). The docker-compose workflow serves the UI via ghttp on `http://localhost:4173`, so keep that origin in the list unless you host the web bundle elsewhere.
+- **DISABLE_WEB_INTERFACE:**  
+  Set to `true`, `1`, `yes`, or `on` (or start the server with `--disable-web-interface`) to skip booting the Gin/HTML stack entirely. When disabled, Pinguin runs the gRPC service only and skips Google Identity/TAuth/HTTP configuration checks, which is useful for backends that never expose the dashboard.
 - **ADMINS:**  
   Comma-separated list of administrator email addresses. Only these accounts can load the dashboard or call the HTTP API; all other sessions receive a `403` response even if they hold a valid TAuth cookie.
 - **TAuth CORS allowlist:**  

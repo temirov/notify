@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"flag"
 	"fmt"
 	"net"
 	"net/http"
@@ -315,7 +316,10 @@ func buildAuthInterceptor(logger *slog.Logger, requiredToken string) grpc.UnaryS
 }
 
 func main() {
-	configuration, configErr := config.LoadConfig()
+	disableWebFlag := flag.Bool("disable-web-interface", false, "disable the HTTP web interface and static asset server (env: DISABLE_WEB_INTERFACE)")
+	flag.Parse()
+
+	configuration, configErr := config.LoadConfig(*disableWebFlag)
 	if configErr != nil {
 		fallbackLogger := logging.NewLogger("INFO")
 		for _, errMsg := range strings.Split(configErr.Error(), ", ") {
@@ -340,46 +344,50 @@ func main() {
 	defer cancelWorker()
 	go notificationSvc.StartRetryWorker(workerCtx)
 
-	sessionValidator, validatorErr := sessionvalidator.New(sessionvalidator.Config{
-		SigningKey: []byte(configuration.TAuthSigningKey),
-		Issuer:     configuration.TAuthIssuer,
-		CookieName: configuration.TAuthCookieName,
-	})
-	if validatorErr != nil {
-		mainLogger.Error("Failed to initialize session validator", "error", validatorErr)
-		os.Exit(1)
-	}
+	if configuration.WebInterfaceEnabled {
+		sessionValidator, validatorErr := sessionvalidator.New(sessionvalidator.Config{
+			SigningKey: []byte(configuration.TAuthSigningKey),
+			Issuer:     configuration.TAuthIssuer,
+			CookieName: configuration.TAuthCookieName,
+		})
+		if validatorErr != nil {
+			mainLogger.Error("Failed to initialize session validator", "error", validatorErr)
+			os.Exit(1)
+		}
 
-	httpServer, httpServerErr := httpapi.NewServer(httpapi.Config{
-		ListenAddr:          configuration.HTTPListenAddr,
-		StaticRoot:          configuration.HTTPStaticRoot,
-		AllowedOrigins:      configuration.HTTPAllowedOrigins,
-		AdminEmails:         configuration.AdminEmails,
-		SessionValidator:    sessionValidator,
-		NotificationService: notificationSvc,
-		Logger:              mainLogger,
-	})
-	if httpServerErr != nil {
-		mainLogger.Error("Failed to initialize HTTP server", "error", httpServerErr)
-		os.Exit(1)
-	}
+		httpServer, httpServerErr := httpapi.NewServer(httpapi.Config{
+			ListenAddr:          configuration.HTTPListenAddr,
+			StaticRoot:          configuration.HTTPStaticRoot,
+			AllowedOrigins:      configuration.HTTPAllowedOrigins,
+			AdminEmails:         configuration.AdminEmails,
+			SessionValidator:    sessionValidator,
+			NotificationService: notificationSvc,
+			Logger:              mainLogger,
+		})
+		if httpServerErr != nil {
+			mainLogger.Error("Failed to initialize HTTP server", "error", httpServerErr)
+			os.Exit(1)
+		}
 
-	go func() {
-		mainLogger.Info("HTTP server listening", "addr", configuration.HTTPListenAddr)
-		if err := httpServer.Start(); err != nil {
-			if !errors.Is(err, http.ErrServerClosed) {
-				mainLogger.Error("HTTP server crashed", "error", err)
-				os.Exit(1)
+		go func() {
+			mainLogger.Info("HTTP server listening", "addr", configuration.HTTPListenAddr)
+			if err := httpServer.Start(); err != nil {
+				if !errors.Is(err, http.ErrServerClosed) {
+					mainLogger.Error("HTTP server crashed", "error", err)
+					os.Exit(1)
+				}
 			}
-		}
-	}()
-	defer func() {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := httpServer.Shutdown(shutdownCtx); err != nil {
-			mainLogger.Error("HTTP server shutdown error", "error", err)
-		}
-	}()
+		}()
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := httpServer.Shutdown(shutdownCtx); err != nil {
+				mainLogger.Error("HTTP server shutdown error", "error", err)
+			}
+		}()
+	} else {
+		mainLogger.Info("Web interface disabled; HTTP server not started")
+	}
 
 	grpcServer := grpc.NewServer(
 		grpc.MaxRecvMsgSize(grpcutil.MaxMessageSizeBytes),

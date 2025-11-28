@@ -17,10 +17,11 @@ type Config struct {
 	MaxRetries       int
 	RetryIntervalSec int
 
-	HTTPListenAddr     string
-	HTTPStaticRoot     string
-	HTTPAllowedOrigins []string
-	AdminEmails        []string
+	WebInterfaceEnabled bool
+	HTTPListenAddr      string
+	HTTPStaticRoot      string
+	HTTPAllowedOrigins  []string
+	AdminEmails         []string
 
 	TAuthSigningKey string
 	TAuthIssuer     string
@@ -42,8 +43,10 @@ type Config struct {
 }
 
 // LoadConfig retrieves all required environment variables concurrently.
-func LoadConfig() (Config, error) {
+func LoadConfig(disableWebInterface bool) (Config, error) {
 	var configuration Config
+	configuration.WebInterfaceEnabled = !disableWebInterface && !parseDisabledEnv("DISABLE_WEB_INTERFACE")
+
 	var waitGroup sync.WaitGroup
 
 	taskFunctions := []func() error{
@@ -52,9 +55,6 @@ func LoadConfig() (Config, error) {
 		loadEnvString("LOG_LEVEL", &configuration.LogLevel),
 		loadEnvInt("MAX_RETRIES", &configuration.MaxRetries),
 		loadEnvInt("RETRY_INTERVAL_SEC", &configuration.RetryIntervalSec),
-		loadEnvString("HTTP_LISTEN_ADDR", &configuration.HTTPListenAddr),
-		loadEnvString("TAUTH_SIGNING_KEY", &configuration.TAuthSigningKey),
-		loadEnvString("TAUTH_ISSUER", &configuration.TAuthIssuer),
 		loadEnvString("SMTP_USERNAME", &configuration.SMTPUsername),
 		loadEnvString("SMTP_PASSWORD", &configuration.SMTPPassword),
 		loadEnvString("SMTP_HOST", &configuration.SMTPHost),
@@ -62,6 +62,14 @@ func LoadConfig() (Config, error) {
 		loadEnvString("FROM_EMAIL", &configuration.FromEmail),
 		loadEnvInt("CONNECTION_TIMEOUT_SEC", &configuration.ConnectionTimeoutSec),
 		loadEnvInt("OPERATION_TIMEOUT_SEC", &configuration.OperationTimeoutSec),
+	}
+
+	if configuration.WebInterfaceEnabled {
+		taskFunctions = append(taskFunctions,
+			loadEnvString("HTTP_LISTEN_ADDR", &configuration.HTTPListenAddr),
+			loadEnvString("TAUTH_SIGNING_KEY", &configuration.TAuthSigningKey),
+			loadEnvString("TAUTH_ISSUER", &configuration.TAuthIssuer),
+		)
 	}
 
 	errorChannel := make(chan error, len(taskFunctions))
@@ -86,26 +94,36 @@ func LoadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("configuration errors: %s", strings.Join(errorMessages, ", "))
 	}
 
-	configuration.HTTPStaticRoot = strings.TrimSpace(os.Getenv("HTTP_STATIC_ROOT"))
-	if configuration.HTTPStaticRoot == "" {
-		configuration.HTTPStaticRoot = defaultHTTPStaticRoot
+	if configuration.WebInterfaceEnabled {
+		configuration.HTTPStaticRoot = strings.TrimSpace(os.Getenv("HTTP_STATIC_ROOT"))
+		if configuration.HTTPStaticRoot == "" {
+			configuration.HTTPStaticRoot = defaultHTTPStaticRoot
+		}
+		configuration.HTTPAllowedOrigins = parseCSV(os.Getenv("HTTP_ALLOWED_ORIGINS"))
+
+		adminListRaw := strings.TrimSpace(os.Getenv("ADMINS"))
+		if adminListRaw == "" {
+			return Config{}, fmt.Errorf("configuration errors: missing admin emails")
+		}
+		configuration.AdminEmails = parseCSV(adminListRaw)
+		if len(configuration.AdminEmails) == 0 {
+			return Config{}, fmt.Errorf("configuration errors: missing admin emails")
+		}
+
+		configuration.TAuthCookieName = strings.TrimSpace(os.Getenv("TAUTH_COOKIE_NAME"))
+		if configuration.TAuthCookieName == "" {
+			configuration.TAuthCookieName = "app_session"
+		}
+	} else {
+		configuration.HTTPStaticRoot = ""
+		configuration.HTTPAllowedOrigins = nil
+		configuration.AdminEmails = nil
+		configuration.TAuthCookieName = ""
 	}
+
 	configuration.TwilioAccountSID = strings.TrimSpace(os.Getenv("TWILIO_ACCOUNT_SID"))
 	configuration.TwilioAuthToken = strings.TrimSpace(os.Getenv("TWILIO_AUTH_TOKEN"))
 	configuration.TwilioFromNumber = strings.TrimSpace(os.Getenv("TWILIO_FROM_NUMBER"))
-	configuration.TAuthCookieName = strings.TrimSpace(os.Getenv("TAUTH_COOKIE_NAME"))
-	if configuration.TAuthCookieName == "" {
-		configuration.TAuthCookieName = "app_session"
-	}
-	configuration.HTTPAllowedOrigins = parseCSV(os.Getenv("HTTP_ALLOWED_ORIGINS"))
-	adminListRaw := strings.TrimSpace(os.Getenv("ADMINS"))
-	if adminListRaw == "" {
-		return Config{}, fmt.Errorf("configuration errors: missing admin emails")
-	}
-	configuration.AdminEmails = parseCSV(adminListRaw)
-	if len(configuration.AdminEmails) == 0 {
-		return Config{}, fmt.Errorf("configuration errors: missing admin emails")
-	}
 
 	return configuration, nil
 }
@@ -158,4 +176,17 @@ func parseCSV(value string) []string {
 		normalized = append(normalized, candidate)
 	}
 	return normalized
+}
+
+func parseDisabledEnv(environmentKey string) bool {
+	rawValue := strings.TrimSpace(os.Getenv(environmentKey))
+	if rawValue == "" {
+		return false
+	}
+	switch strings.ToLower(rawValue) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
