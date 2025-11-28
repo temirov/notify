@@ -112,8 +112,10 @@ Pinguin is configured via environment variables. Create a `.env` file or export 
   Comma-separated list of origins allowed to call the JSON API when running cross-origin (leave empty to allow same-origin only). The docker-compose workflow serves the UI via ghttp on `http://localhost:4173`, so keep that origin in the list unless you host the web bundle elsewhere.
 - **DISABLE_WEB_INTERFACE:**  
   Set to `true`, `1`, `yes`, or `on` (or start the server with `--disable-web-interface`) to skip booting the Gin/HTML stack entirely. When disabled, Pinguin runs the gRPC service only and skips Google Identity/TAuth/HTTP configuration checks, which is useful for backends that never expose the dashboard.
-- **ADMINS:**  
-  Comma-separated list of administrator email addresses. Only these accounts can load the dashboard or call the HTTP API; all other sessions receive a `403` response even if they hold a valid TAuth cookie.
+- **TENANT_CONFIG_PATH:**  
+  Absolute path to the tenant configuration JSON file (see below). Each replica should point at the same file so they share tenant data.
+- **MASTER_ENCRYPTION_KEY:**  
+  Hex-encoded 32-byte key used to encrypt SMTP/Twilio secrets stored in the tenant config. Generate one with `openssl rand -hex 32` and keep it secret.
 - **TAuth CORS allowlist:**  
   When you serve the UI from a different origin (ghttp on `http://localhost:4173`, a CDN, etc.), TAuth must enable CORS and allow both the UI origin *and* `https://accounts.google.com`. Google Identity Services performs the nonce/login exchange from the `accounts.google.com` origin, so omitting it results in `auth.login.nonce_mismatch` errors. The sample `.env.tauth.example` includes `APP_CORS_ALLOWED_ORIGINS="http://localhost:4173,https://accounts.google.com"` for this reason—extend the list with any additional UI origins you deploy.
 - **Front-end TAuth config:**  
@@ -160,6 +162,47 @@ Pinguin is configured via environment variables. Create a `.env` file or export 
   The phone number (in E.164 format) from which SMS messages are sent.
 
   When any of the Twilio variables are omitted, the server starts with SMS delivery disabled and logs a warning that text notifications are unavailable.
+
+### Tenant configuration file
+
+Pinguin now derives tenant metadata (domains, admin accounts, SMTP/Twilio credentials, TAuth identifiers) from the JSON file pointed to by `TENANT_CONFIG_PATH`. Each entry defines one tenant and looks like this:
+
+```json
+{
+  "tenants": [
+    {
+      "id": "tenant-acme",
+      "slug": "acme",
+      "displayName": "Acme Corp",
+      "supportEmail": "support@acme.example",
+      "status": "active",
+      "domains": ["acme.example", "portal.acme.example"],
+      "admins": [
+        {"email": "admin@acme.example", "role": "owner"},
+        {"email": "viewer@acme.example", "role": "viewer"}
+      ],
+      "identity": {
+        "googleClientId": "google-client-id.apps.googleusercontent.com",
+        "tauthBaseUrl": "https://auth.acme.example"
+      },
+      "emailProfile": {
+        "host": "smtp.acme.example",
+        "port": 587,
+        "username": "smtp-user",
+        "password": "smtp-password",
+        "fromAddress": "noreply@acme.example"
+      },
+      "smsProfile": {
+        "accountSid": "ACxxxxxxxx",
+        "authToken": "twilio-secret",
+        "fromNumber": "+12015550123"
+      }
+    }
+  ]
+}
+```
+
+The `MASTER_ENCRYPTION_KEY` is used to encrypt the SMTP/Twilio secrets before they are stored in SQLite. Regenerate the file (or run `tenant.BootstrapFromFile`) whenever you need to add tenants, rotate credentials, or change admin memberships. See [`docs/multitenancy-plan.md`](docs/multitenancy-plan.md) for the end-to-end roadmap.
 
 Example `.env` file:
 

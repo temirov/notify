@@ -10,6 +10,8 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 
 - [x] [PG-104] deliver a detailed technical plan to make pinguin multitenant (allowing serving multiple clients from different domains) — Authored `docs/multitenancy-plan.md` describing the tenancy model, schema changes, config strategy, API updates, migrations, and testing roadmap for multi-domain deployments.
 
+- [ ] [PG-105] implement the multitenancy roadmap from `docs/multitenancy-plan.md` starting with the tenant metadata foundation: added tenant/domain/member models, encrypted credential storage, bootstrap tooling, and repository/context helpers; HTTP middleware/runtime-config/session guards now resolve tenants per host. Next steps: extend gRPC/services/CLI/UI to consume the tenant context.
+
 ## Improvements (202–299)
 
 ## BugFixes (308–399)

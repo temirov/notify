@@ -18,6 +18,7 @@ import (
 	"github.com/temirov/pinguin/internal/httpapi"
 	"github.com/temirov/pinguin/internal/model"
 	"github.com/temirov/pinguin/internal/service"
+	"github.com/temirov/pinguin/internal/tenant"
 	"github.com/temirov/pinguin/pkg/grpcapi"
 	"github.com/temirov/pinguin/pkg/grpcutil"
 	"github.com/temirov/pinguin/pkg/logging"
@@ -337,6 +338,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	secretKeeper, keeperErr := tenant.NewSecretKeeper(configuration.MasterEncryptionKey)
+	if keeperErr != nil {
+		mainLogger.Error("Failed to initialize secret keeper", "error", keeperErr)
+		os.Exit(1)
+	}
+
+	if bootstrapErr := tenant.BootstrapFromFile(context.Background(), databaseInstance, secretKeeper, configuration.TenantConfigPath); bootstrapErr != nil {
+		mainLogger.Error("Failed to bootstrap tenants", "error", bootstrapErr)
+		os.Exit(1)
+	}
+	tenantRepo := tenant.NewRepository(databaseInstance, secretKeeper)
+
 	notificationSvc := service.NewNotificationService(databaseInstance, mainLogger, configuration)
 
 	// Start the background retry worker.
@@ -359,9 +372,9 @@ func main() {
 			ListenAddr:          configuration.HTTPListenAddr,
 			StaticRoot:          configuration.HTTPStaticRoot,
 			AllowedOrigins:      configuration.HTTPAllowedOrigins,
-			AdminEmails:         configuration.AdminEmails,
 			SessionValidator:    sessionValidator,
 			NotificationService: notificationSvc,
+			TenantRepository:    tenantRepo,
 			Logger:              mainLogger,
 		})
 		if httpServerErr != nil {
