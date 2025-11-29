@@ -114,21 +114,31 @@ func (dispatcher *notificationDispatcher) Attempt(ctx context.Context, job sched
 	if err != nil {
 		return scheduler.DispatchResult{}, err
 	}
+	runtimeCfg, runtimeErr := dispatcher.serviceInstance.runtimeForTenantID(ctx, notificationRecord.TenantID)
+	if runtimeErr != nil {
+		dispatcher.serviceInstance.logger.Error("Failed to resolve tenant runtime for retry", "tenant_id", notificationRecord.TenantID, "error", runtimeErr)
+		return scheduler.DispatchResult{Status: string(model.StatusErrored)}, runtimeErr
+	}
 
 	switch notificationRecord.NotificationType {
 	case model.NotificationEmail:
+		emailSender, senderErr := dispatcher.serviceInstance.emailSenderForTenant(runtimeCfg)
+		if senderErr != nil {
+			return scheduler.DispatchResult{Status: string(model.StatusErrored)}, senderErr
+		}
 		emailAttachments := model.ToEmailAttachments(notificationRecord.Attachments)
-		sendErr := dispatcher.serviceInstance.emailSender.SendEmail(ctx, notificationRecord.Recipient, notificationRecord.Subject, notificationRecord.Message, emailAttachments)
+		sendErr := emailSender.SendEmail(ctx, notificationRecord.Recipient, notificationRecord.Subject, notificationRecord.Message, emailAttachments)
 		if sendErr != nil {
 			return scheduler.DispatchResult{}, sendErr
 		}
 		return scheduler.DispatchResult{Status: string(model.StatusSent)}, nil
 	case model.NotificationSMS:
-		if dispatcher.serviceInstance.smsSender == nil || !dispatcher.serviceInstance.smsEnabled {
+		smsSender, senderErr := dispatcher.serviceInstance.smsSenderForTenant(runtimeCfg)
+		if senderErr != nil {
 			dispatcher.serviceInstance.logger.Warn("Skipping SMS retry because delivery is disabled", "notification_id", notificationRecord.NotificationID)
-			return scheduler.DispatchResult{Status: string(model.StatusErrored)}, ErrSMSDisabled
+			return scheduler.DispatchResult{Status: string(model.StatusErrored)}, senderErr
 		}
-		providerMessageID, sendErr := dispatcher.serviceInstance.smsSender.SendSms(ctx, notificationRecord.Recipient, notificationRecord.Message)
+		providerMessageID, sendErr := smsSender.SendSms(ctx, notificationRecord.Recipient, notificationRecord.Message)
 		if sendErr != nil {
 			return scheduler.DispatchResult{}, sendErr
 		}

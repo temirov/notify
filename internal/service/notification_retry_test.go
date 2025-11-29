@@ -36,19 +36,20 @@ func (sender *testSmsSender) SendSms(context.Context, string, string) (string, e
 func TestNotificationDispatcherEmail(t *testing.T) {
 	emailSender := &testEmailSender{}
 	serviceInstance := &notificationServiceImpl{
-		emailSender: emailSender,
-		logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		logger:             slog.New(slog.NewTextHandler(io.Discard, nil)),
+		defaultEmailSender: emailSender,
 	}
 	dispatcher := newNotificationDispatcher(serviceInstance)
 	job := scheduler.Job{
 		Payload: &model.Notification{
+			TenantID:         testTenantID,
 			NotificationType: model.NotificationEmail,
 			Recipient:        "user@example.com",
 			Subject:          "Hello",
 			Message:          "Body",
 		},
 	}
-	result, err := dispatcher.Attempt(context.Background(), job)
+	result, err := dispatcher.Attempt(tenantContext(), job)
 	if err != nil {
 		t.Fatalf("Attempt returned error: %v", err)
 	}
@@ -62,18 +63,18 @@ func TestNotificationDispatcherEmail(t *testing.T) {
 
 func TestNotificationDispatcherSMSDisabled(t *testing.T) {
 	serviceInstance := &notificationServiceImpl{
-		logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
-		smsEnabled: false,
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 	dispatcher := newNotificationDispatcher(serviceInstance)
 	job := scheduler.Job{
 		Payload: &model.Notification{
+			TenantID:         testTenantID,
 			NotificationType: model.NotificationSMS,
 			Recipient:        "+1222",
 			Message:          "Body",
 		},
 	}
-	result, err := dispatcher.Attempt(context.Background(), job)
+	result, err := dispatcher.Attempt(tenantContextWithoutSMS(), job)
 	if err != ErrSMSDisabled {
 		t.Fatalf("expected ErrSMSDisabled, got %v", err)
 	}
@@ -85,19 +86,19 @@ func TestNotificationDispatcherSMSDisabled(t *testing.T) {
 func TestNotificationDispatcherSMSSuccess(t *testing.T) {
 	sender := &testSmsSender{response: "sid-123"}
 	serviceInstance := &notificationServiceImpl{
-		logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
-		smsSender:  sender,
-		smsEnabled: true,
+		logger:           slog.New(slog.NewTextHandler(io.Discard, nil)),
+		defaultSmsSender: sender,
 	}
 	dispatcher := newNotificationDispatcher(serviceInstance)
 	job := scheduler.Job{
 		Payload: &model.Notification{
+			TenantID:         testTenantID,
 			NotificationType: model.NotificationSMS,
 			Recipient:        "+1333",
 			Message:          "Body",
 		},
 	}
-	result, err := dispatcher.Attempt(context.Background(), job)
+	result, err := dispatcher.Attempt(tenantContext(), job)
 	if err != nil {
 		t.Fatalf("Attempt returned error: %v", err)
 	}

@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/temirov/pinguin/internal/config"
@@ -46,14 +48,17 @@ const (
 )
 
 type notificationServiceImpl struct {
-	database         *gorm.DB
-	logger           *slog.Logger
-	tenantRepo       *tenant.Repository
-	emailSender      EmailSender
-	smsSender        SmsSender
-	maxRetries       int
-	retryIntervalSec int
-	smsEnabled       bool
+	database           *gorm.DB
+	logger             *slog.Logger
+	tenantRepo         *tenant.Repository
+	config             config.Config
+	defaultEmailSender EmailSender
+	defaultSmsSender   SmsSender
+	maxRetries         int
+	retryIntervalSec   int
+	senderMutex        sync.RWMutex
+	emailSenders       map[string]EmailSender
+	smsSenders         map[string]SmsSender
 }
 
 // NewNotificationService creates a NotificationService backed by SMTP/Twilio senders.
@@ -70,7 +75,12 @@ func NewNotificationServiceWithSenders(
 	emailSender EmailSender,
 	smsSender SmsSender,
 ) NotificationService {
-	if emailSender == nil {
+	var defaultEmailSender EmailSender
+	var defaultSmsSender SmsSender
+
+	if emailSender != nil {
+		defaultEmailSender = emailSender
+	} else if tenantRepo == nil {
 		emailSender = NewSMTPEmailSender(SMTPConfig{
 			Host:        cfg.SMTPHost,
 			Port:        fmt.Sprintf("%d", cfg.SMTPPort),
@@ -79,30 +89,29 @@ func NewNotificationServiceWithSenders(
 			FromAddress: cfg.FromEmail,
 			Timeouts:    cfg,
 		}, logger)
+		defaultEmailSender = emailSender
 	}
 
-	var resolvedSmsSender SmsSender
-	var smsEnabled bool
 	switch {
 	case smsSender != nil:
-		resolvedSmsSender = smsSender
-		smsEnabled = true
-	case cfg.TwilioConfigured():
-		resolvedSmsSender = NewTwilioSmsSender(cfg.TwilioAccountSID, cfg.TwilioAuthToken, cfg.TwilioFromNumber, logger, cfg)
-		smsEnabled = true
-	default:
+		defaultSmsSender = smsSender
+	case tenantRepo == nil && cfg.TwilioConfigured():
+		defaultSmsSender = NewTwilioSmsSender(cfg.TwilioAccountSID, cfg.TwilioAuthToken, cfg.TwilioFromNumber, logger, cfg)
+	case tenantRepo == nil:
 		logger.Warn("SMS notifications disabled: missing Twilio credentials")
 	}
 
 	return &notificationServiceImpl{
-		database:         db,
-		logger:           logger,
-		tenantRepo:       tenantRepo,
-		emailSender:      emailSender,
-		smsSender:        resolvedSmsSender,
-		maxRetries:       cfg.MaxRetries,
-		retryIntervalSec: cfg.RetryIntervalSec,
-		smsEnabled:       smsEnabled,
+		database:           db,
+		logger:             logger,
+		tenantRepo:         tenantRepo,
+		config:             cfg,
+		defaultEmailSender: defaultEmailSender,
+		defaultSmsSender:   defaultSmsSender,
+		maxRetries:         cfg.MaxRetries,
+		retryIntervalSec:   cfg.RetryIntervalSec,
+		emailSenders:       make(map[string]EmailSender),
+		smsSenders:         make(map[string]SmsSender),
 	}
 }
 
@@ -122,11 +131,6 @@ func (serviceInstance *notificationServiceImpl) SendNotification(ctx context.Con
 	default:
 		serviceInstance.logger.Error("Unsupported notification type", "type", request.NotificationType)
 		return model.NotificationResponse{}, fmt.Errorf("unsupported notification type: %s", request.NotificationType)
-	}
-
-	if request.NotificationType == model.NotificationSMS && !serviceInstance.smsEnabled {
-		serviceInstance.logger.Warn("SMS notification rejected because delivery is disabled", "recipient", request.Recipient)
-		return model.NotificationResponse{}, ErrSMSDisabled
 	}
 
 	normalizedAttachments, attachmentsErr := normalizeAttachments(request.NotificationType, request.Attachments)
@@ -150,19 +154,27 @@ func (serviceInstance *notificationServiceImpl) SendNotification(ctx context.Con
 	if shouldAttemptImmediateSend {
 		switch newNotification.NotificationType {
 		case model.NotificationEmail:
-			dispatchError = serviceInstance.emailSender.SendEmail(ctx, newNotification.Recipient, newNotification.Subject, newNotification.Message, request.Attachments)
+			var emailSender EmailSender
+			emailSender, err = serviceInstance.emailSenderForTenant(runtimeCfg)
+			if err != nil {
+				serviceInstance.logger.Error("Email sender unavailable", "tenant_id", runtimeCfg.Tenant.ID, "error", err)
+				return model.NotificationResponse{}, err
+			}
+			dispatchError = emailSender.SendEmail(ctx, newNotification.Recipient, newNotification.Subject, newNotification.Message, request.Attachments)
 			if dispatchError == nil {
 				newNotification.Status = model.StatusSent
 				newNotification.LastAttemptedAt = currentTime
 				// When using SMTP no provider message ID is returned.
 			}
 		case model.NotificationSMS:
-			if serviceInstance.smsSender == nil {
-				dispatchError = ErrSMSDisabled
-				break
+			var smsSender SmsSender
+			smsSender, err = serviceInstance.smsSenderForTenant(runtimeCfg)
+			if err != nil {
+				serviceInstance.logger.Warn("SMS sender unavailable", "tenant_id", runtimeCfg.Tenant.ID, "error", err)
+				return model.NotificationResponse{}, err
 			}
 			var providerMessageID string
-			providerMessageID, dispatchError = serviceInstance.smsSender.SendSms(ctx, newNotification.Recipient, newNotification.Message)
+			providerMessageID, dispatchError = smsSender.SendSms(ctx, newNotification.Recipient, newNotification.Message)
 			if dispatchError == nil {
 				newNotification.Status = model.StatusSent
 				newNotification.ProviderMessageID = providerMessageID
@@ -350,6 +362,81 @@ func (serviceInstance *notificationServiceImpl) requireTenant(ctx context.Contex
 	runtimeCfg, ok := tenant.RuntimeFromContext(ctx)
 	if !ok {
 		return tenant.RuntimeConfig{}, ErrMissingTenantContext
+	}
+	return runtimeCfg, nil
+}
+
+func (serviceInstance *notificationServiceImpl) emailSenderForTenant(runtimeCfg tenant.RuntimeConfig) (EmailSender, error) {
+	if serviceInstance.defaultEmailSender != nil {
+		return serviceInstance.defaultEmailSender, nil
+	}
+	if runtimeCfg.Email.Host == "" || runtimeCfg.Email.Username == "" || runtimeCfg.Email.Password == "" || runtimeCfg.Email.FromAddress == "" {
+		return nil, fmt.Errorf("email credentials unavailable for tenant %s", runtimeCfg.Tenant.ID)
+	}
+	serviceInstance.senderMutex.RLock()
+	cached := serviceInstance.emailSenders[runtimeCfg.Tenant.ID]
+	serviceInstance.senderMutex.RUnlock()
+	if cached != nil {
+		return cached, nil
+	}
+	smtpSender := NewSMTPEmailSender(SMTPConfig{
+		Host:        runtimeCfg.Email.Host,
+		Port:        strconv.Itoa(runtimeCfg.Email.Port),
+		Username:    runtimeCfg.Email.Username,
+		Password:    runtimeCfg.Email.Password,
+		FromAddress: runtimeCfg.Email.FromAddress,
+		Timeouts:    serviceInstance.config,
+	}, serviceInstance.logger)
+	serviceInstance.senderMutex.Lock()
+	defer serviceInstance.senderMutex.Unlock()
+	if existing := serviceInstance.emailSenders[runtimeCfg.Tenant.ID]; existing != nil {
+		return existing, nil
+	}
+	serviceInstance.emailSenders[runtimeCfg.Tenant.ID] = smtpSender
+	return smtpSender, nil
+}
+
+func (serviceInstance *notificationServiceImpl) smsSenderForTenant(runtimeCfg tenant.RuntimeConfig) (SmsSender, error) {
+	if serviceInstance.defaultSmsSender != nil {
+		return serviceInstance.defaultSmsSender, nil
+	}
+	if runtimeCfg.SMS == nil || runtimeCfg.SMS.AccountSID == "" || runtimeCfg.SMS.AuthToken == "" || runtimeCfg.SMS.FromNumber == "" {
+		return nil, ErrSMSDisabled
+	}
+	serviceInstance.senderMutex.RLock()
+	cached := serviceInstance.smsSenders[runtimeCfg.Tenant.ID]
+	serviceInstance.senderMutex.RUnlock()
+	if cached != nil {
+		return cached, nil
+	}
+	smsSender := NewTwilioSmsSender(runtimeCfg.SMS.AccountSID, runtimeCfg.SMS.AuthToken, runtimeCfg.SMS.FromNumber, serviceInstance.logger, serviceInstance.config)
+	serviceInstance.senderMutex.Lock()
+	defer serviceInstance.senderMutex.Unlock()
+	if existing := serviceInstance.smsSenders[runtimeCfg.Tenant.ID]; existing != nil {
+		return existing, nil
+	}
+	serviceInstance.smsSenders[runtimeCfg.Tenant.ID] = smsSender
+	return smsSender, nil
+}
+
+func (serviceInstance *notificationServiceImpl) runtimeForTenantID(ctx context.Context, tenantID string) (tenant.RuntimeConfig, error) {
+	if tenantID == "" {
+		return tenant.RuntimeConfig{}, ErrMissingTenantContext
+	}
+	if serviceInstance.tenantRepo != nil {
+		return serviceInstance.tenantRepo.ResolveByID(ctx, tenantID)
+	}
+	runtimeCfg, ok := tenant.RuntimeFromContext(ctx)
+	if !ok {
+		if serviceInstance.defaultEmailSender != nil || serviceInstance.defaultSmsSender != nil {
+			return tenant.RuntimeConfig{
+				Tenant: tenant.Tenant{ID: tenantID},
+			}, nil
+		}
+		return tenant.RuntimeConfig{}, ErrMissingTenantContext
+	}
+	if runtimeCfg.Tenant.ID != tenantID {
+		return tenant.RuntimeConfig{}, fmt.Errorf("tenant mismatch: context=%s payload=%s", runtimeCfg.Tenant.ID, tenantID)
 	}
 	return runtimeCfg, nil
 }

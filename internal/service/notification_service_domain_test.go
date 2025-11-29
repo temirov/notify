@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/temirov/pinguin/internal/config"
 	"github.com/temirov/pinguin/internal/model"
+	"github.com/temirov/pinguin/internal/tenant"
 	"gorm.io/gorm"
 	"log/slog"
 )
@@ -196,15 +198,112 @@ func TestCancelNotificationRejectsNonQueued(t *testing.T) {
 	}
 }
 
+func TestEmailSenderForTenantUsesRuntimeCredentials(t *testing.T) {
+	t.Helper()
+
+	serviceInstance := &notificationServiceImpl{
+		logger:       slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
+		config:       config.Config{ConnectionTimeoutSec: 5, OperationTimeoutSec: 5},
+		emailSenders: make(map[string]EmailSender),
+		smsSenders:   make(map[string]SmsSender),
+	}
+
+	alphaRuntime := tenant.RuntimeConfig{
+		Tenant: tenant.Tenant{ID: "tenant-alpha"},
+		Email: tenant.EmailCredentials{
+			Host:        "smtp.alpha.example",
+			Port:        2525,
+			Username:    "alpha-user",
+			Password:    "alpha-pass",
+			FromAddress: "noreply@alpha.example",
+		},
+	}
+	sender, err := serviceInstance.emailSenderForTenant(alphaRuntime)
+	if err != nil {
+		t.Fatalf("email sender resolve error: %v", err)
+	}
+	smtpSender, ok := sender.(*SMTPEmailSender)
+	if !ok {
+		t.Fatalf("expected SMTPEmailSender, got %T", sender)
+	}
+	if smtpSender.Config.Host != "smtp.alpha.example" || smtpSender.Config.Username != "alpha-user" {
+		t.Fatalf("smtp config mismatch: %+v", smtpSender.Config)
+	}
+	cached, err := serviceInstance.emailSenderForTenant(alphaRuntime)
+	if err != nil {
+		t.Fatalf("cached sender error: %v", err)
+	}
+	if cached != sender {
+		t.Fatalf("expected cached sender reuse")
+	}
+
+	bravoRuntime := tenant.RuntimeConfig{
+		Tenant: tenant.Tenant{ID: "tenant-bravo"},
+		Email: tenant.EmailCredentials{
+			Host:        "smtp.bravo.example",
+			Port:        465,
+			Username:    "bravo-user",
+			Password:    "bravo-pass",
+			FromAddress: "noreply@bravo.example",
+		},
+	}
+	otherSender, err := serviceInstance.emailSenderForTenant(bravoRuntime)
+	if err != nil {
+		t.Fatalf("second sender error: %v", err)
+	}
+	if otherSender == sender {
+		t.Fatalf("expected distinct sender instances for different tenants")
+	}
+}
+
+func TestSmsSenderForTenantUsesRuntimeCredentials(t *testing.T) {
+	t.Helper()
+
+	serviceInstance := &notificationServiceImpl{
+		logger:       slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
+		config:       config.Config{ConnectionTimeoutSec: 5, OperationTimeoutSec: 5},
+		emailSenders: make(map[string]EmailSender),
+		smsSenders:   make(map[string]SmsSender),
+	}
+
+	bravoRuntime := tenant.RuntimeConfig{
+		Tenant: tenant.Tenant{ID: "tenant-bravo"},
+		SMS: &tenant.SMSCredentials{
+			AccountSID: "AC123",
+			AuthToken:  "token",
+			FromNumber: "+15550001111",
+		},
+	}
+	sender, err := serviceInstance.smsSenderForTenant(bravoRuntime)
+	if err != nil {
+		t.Fatalf("sms sender error: %v", err)
+	}
+	twilioSender, ok := sender.(*TwilioSmsSender)
+	if !ok {
+		t.Fatalf("expected TwilioSmsSender, got %T", sender)
+	}
+	if twilioSender.FromNumber != "+15550001111" || twilioSender.AccountSID != "AC123" {
+		t.Fatalf("twilio sender mismatch: %+v", twilioSender)
+	}
+	cached, err := serviceInstance.smsSenderForTenant(bravoRuntime)
+	if err != nil {
+		t.Fatalf("cached sms sender error: %v", err)
+	}
+	if cached != sender {
+		t.Fatalf("expected cached sms sender")
+	}
+}
+
 func newNotificationServiceForDomainTests(database *gorm.DB) *notificationServiceImpl {
 	return &notificationServiceImpl{
-		database:         database,
-		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
-		emailSender:      &stubEmailSender{},
-		smsSender:        &stubSmsSender{},
-		maxRetries:       3,
-		retryIntervalSec: 1,
-		smsEnabled:       true,
+		database:           database,
+		logger:             slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
+		defaultEmailSender: &stubEmailSender{},
+		defaultSmsSender:   &stubSmsSender{},
+		maxRetries:         3,
+		retryIntervalSec:   1,
+		emailSenders:       make(map[string]EmailSender),
+		smsSenders:         make(map[string]SmsSender),
 	}
 }
 

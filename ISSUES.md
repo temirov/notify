@@ -12,6 +12,14 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 
 - [x] [PG-105] implement the multitenancy roadmap from `docs/multitenancy-plan.md` starting with the tenant metadata foundation: added tenant/domain/member models, encrypted credential storage, bootstrap tooling, and repository/context helpers; HTTP middleware/runtime-config/session guards now resolve tenants per host. Completed tenant-scoped models, gRPC handlers, service layer, retry worker, and tests so every RPC requires a tenant context and queues remain isolated per tenant.
 
+- [x] [PG-106] expose tenant metadata over gRPC/CLI/SDK surfaces — Added `tenant_id` fields to every proto request, ensured the CLI/SDK require `PINGUIN_TENANT_ID`, and updated the gRPC server to accept either `tenant_id` or the `x-tenant-id` metadata header so API clients can scope calls explicitly per tenant.
+
+- [ ] [PG-107] bind notification delivery to tenant-scoped credentials — The service still uses process-wide SMTP/Twilio configuration even though tenant repositories now expose decrypted `EmailCredentials`/`SMSCredentials`. Update `internal/service/notification_service` (and retry dispatcher) to resolve the tenant runtime configuration per request, construct/caches per-tenant senders, and ensure queued notifications reference the tenant-specific providers. Add tests proving that different tenants dispatch with their own SMTP/Twilio secrets and that SMS-disabled tenants log useful errors.
+
+- [ ] [PG-108] surface tenant identity in the browser runtime config and UI — `/runtime-config` already returns the tenant slug/display name plus Google/TAuth IDs, but `web/js/bootstrap.js`, `constants.js`, and the `<mpr-header>` wiring still rely on the static tauth config. Update the bootstrap pipeline to hydrate tenant identity from the runtime payload, show the resolved tenant name in the dashboard shell, and ensure Playwright tests cover distinct tenants (different hostnames, Google IDs, display names). This unblocks tenant-branded dashboards without rebuilding the bundle per deployment.
+
+- [ ] [PG-109] add HTTP + Playwright regression tests for multi-tenant isolation — Extend Go HTTP tests (and new Playwright suites) to spin up two tenants/domains, asserting that `/runtime-config` reflects the correct tenant, that unauthorized hosts receive 404s, and that dashboard actions cannot cross tenants even with forged IDs. This issue also tracks adding fixture tooling to seed multiple tenants for the browser tests.
+
 ## Improvements (202–299)
 
 ## BugFixes (308–399)

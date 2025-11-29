@@ -50,15 +50,8 @@ func TestSendNotificationRespectsSchedule(t *testing.T) {
 			emailSender := &stubEmailSender{}
 			smsSender := &stubSmsSender{}
 
-			serviceInstance := &notificationServiceImpl{
-				database:         database,
-				logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
-				emailSender:      emailSender,
-				smsSender:        smsSender,
-				maxRetries:       5,
-				retryIntervalSec: 1,
-				smsEnabled:       true,
-			}
+			serviceInstance := newNotificationServiceWithSendersForSchedulerTests(database, emailSender, smsSender)
+			serviceInstance.maxRetries = 5
 
 			var scheduledFor *time.Time
 			if testCase.scheduledOffset != nil {
@@ -127,15 +120,8 @@ func TestSendNotificationRejectsUnsupportedTypes(t *testing.T) {
 			emailSender := &stubEmailSender{}
 			smsSender := &stubSmsSender{}
 
-			serviceInstance := &notificationServiceImpl{
-				database:         database,
-				logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
-				emailSender:      emailSender,
-				smsSender:        smsSender,
-				maxRetries:       5,
-				retryIntervalSec: 1,
-				smsEnabled:       true,
-			}
+			serviceInstance := newNotificationServiceWithSendersForSchedulerTests(database, emailSender, smsSender)
+			serviceInstance.maxRetries = 5
 
 			var scheduledFor *time.Time
 			if testCase.scheduledOffset != nil {
@@ -178,15 +164,8 @@ func TestRetryWorkerRespectsSchedule(t *testing.T) {
 	database := openIsolatedDatabase(t)
 	emailSender := &stubEmailSender{}
 	smsSender := &stubSmsSender{}
-	serviceInstance := &notificationServiceImpl{
-		database:         database,
-		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
-		emailSender:      emailSender,
-		smsSender:        smsSender,
-		maxRetries:       5,
-		retryIntervalSec: 1,
-		smsEnabled:       true,
-	}
+	serviceInstance := newNotificationServiceWithSendersForSchedulerTests(database, emailSender, smsSender)
+	serviceInstance.maxRetries = 5
 
 	now := time.Now().UTC()
 	future := now.Add(5 * time.Minute)
@@ -247,15 +226,8 @@ func TestSendNotificationValidatesRequiredFields(t *testing.T) {
 	emailSender := &stubEmailSender{}
 	smsSender := &stubSmsSender{}
 
-	serviceInstance := &notificationServiceImpl{
-		database:         database,
-		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
-		emailSender:      emailSender,
-		smsSender:        smsSender,
-		maxRetries:       3,
-		retryIntervalSec: 1,
-		smsEnabled:       true,
-	}
+	serviceInstance := newNotificationServiceWithSendersForSchedulerTests(database, emailSender, smsSender)
+	serviceInstance.maxRetries = 3
 
 	_, sendError := serviceInstance.SendNotification(tenantContext(), model.NotificationRequest{
 		NotificationType: model.NotificationSMS,
@@ -283,15 +255,8 @@ func TestSendNotificationRejectsUnsupportedTypeForScheduledRequests(t *testing.T
 	emailSender := &stubEmailSender{}
 	smsSender := &stubSmsSender{}
 
-	serviceInstance := &notificationServiceImpl{
-		database:         database,
-		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
-		emailSender:      emailSender,
-		smsSender:        smsSender,
-		maxRetries:       3,
-		retryIntervalSec: 1,
-		smsEnabled:       true,
-	}
+	serviceInstance := newNotificationServiceWithSendersForSchedulerTests(database, emailSender, smsSender)
+	serviceInstance.maxRetries = 3
 
 	scheduledFor := time.Now().UTC().Add(5 * time.Minute)
 	_, sendError := serviceInstance.SendNotification(tenantContext(), model.NotificationRequest{
@@ -322,15 +287,9 @@ func TestSendNotificationRejectsSmsWhenSenderDisabled(t *testing.T) {
 	t.Helper()
 
 	database := openIsolatedDatabase(t)
-	serviceInstance := &notificationServiceImpl{
-		database:         database,
-		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
-		emailSender:      &stubEmailSender{},
-		smsSender:        nil,
-		maxRetries:       3,
-		retryIntervalSec: 1,
-		smsEnabled:       false,
-	}
+	emailSender := &stubEmailSender{}
+	serviceInstance := newNotificationServiceWithSendersForSchedulerTests(database, emailSender, nil)
+	serviceInstance.maxRetries = 3
 
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -338,7 +297,7 @@ func TestSendNotificationRejectsSmsWhenSenderDisabled(t *testing.T) {
 		}
 	}()
 
-	_, sendError := serviceInstance.SendNotification(tenantContext(), model.NotificationRequest{
+	_, sendError := serviceInstance.SendNotification(tenantContextWithoutSMS(), model.NotificationRequest{
 		NotificationType: model.NotificationSMS,
 		Recipient:        "+15555555555",
 		Message:          "Body",
@@ -348,7 +307,7 @@ func TestSendNotificationRejectsSmsWhenSenderDisabled(t *testing.T) {
 	}
 
 	var notificationCount int64
-	if countError := database.WithContext(tenantContext()).Model(&model.Notification{}).Count(&notificationCount).Error; countError != nil {
+	if countError := database.WithContext(tenantContextWithoutSMS()).Model(&model.Notification{}).Count(&notificationCount).Error; countError != nil {
 		t.Fatalf("count notifications error: %v", countError)
 	}
 	if notificationCount != 0 {
@@ -360,15 +319,8 @@ func TestSendNotificationRejectsAttachmentsForSms(t *testing.T) {
 	t.Helper()
 
 	database := openIsolatedDatabase(t)
-	serviceInstance := &notificationServiceImpl{
-		database:         database,
-		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
-		emailSender:      &stubEmailSender{},
-		smsSender:        &stubSmsSender{},
-		maxRetries:       3,
-		retryIntervalSec: 1,
-		smsEnabled:       true,
-	}
+	serviceInstance := newNotificationServiceWithSendersForSchedulerTests(database, &stubEmailSender{}, &stubSmsSender{})
+	serviceInstance.maxRetries = 3
 
 	_, err := serviceInstance.SendNotification(tenantContext(), model.NotificationRequest{
 		NotificationType: model.NotificationSMS,
@@ -392,15 +344,8 @@ func TestSendNotificationPersistsAttachments(t *testing.T) {
 
 	database := openIsolatedDatabase(t)
 	emailSender := &stubEmailSender{}
-	serviceInstance := &notificationServiceImpl{
-		database:         database,
-		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
-		emailSender:      emailSender,
-		smsSender:        &stubSmsSender{},
-		maxRetries:       3,
-		retryIntervalSec: 1,
-		smsEnabled:       true,
-	}
+	serviceInstance := newNotificationServiceWithSendersForSchedulerTests(database, emailSender, &stubSmsSender{})
+	serviceInstance.maxRetries = 3
 
 	attachment := model.EmailAttachment{
 		Filename:    "hello.txt",
@@ -442,15 +387,8 @@ func TestRetryWorkerMarksSmsDisabledAsFailed(t *testing.T) {
 	t.Helper()
 
 	database := openIsolatedDatabase(t)
-	serviceInstance := &notificationServiceImpl{
-		database:         database,
-		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
-		emailSender:      &stubEmailSender{},
-		smsSender:        nil,
-		maxRetries:       3,
-		retryIntervalSec: 1,
-		smsEnabled:       false,
-	}
+	serviceInstance := newNotificationServiceWithSendersForSchedulerTests(database, &stubEmailSender{}, nil)
+	serviceInstance.maxRetries = 3
 
 	now := time.Now().UTC()
 	smsNotification := model.Notification{
@@ -469,7 +407,7 @@ func TestRetryWorkerMarksSmsDisabledAsFailed(t *testing.T) {
 
 	clock := &adjustableClock{now: now}
 	worker := newRetryWorkerForTest(t, serviceInstance, clock)
-	worker.RunOnce(tenantContext())
+	worker.RunOnce(tenantContextWithoutSMS())
 
 	updated, fetchErr := model.GetNotificationByID(tenantContext(), database, testTenantID, "notif-sms-disabled")
 	if fetchErr != nil {
@@ -488,15 +426,8 @@ func TestRetryWorkerDispatchesStoredAttachments(t *testing.T) {
 
 	database := openIsolatedDatabase(t)
 	emailSender := &stubEmailSender{}
-	serviceInstance := &notificationServiceImpl{
-		database:         database,
-		logger:           slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
-		emailSender:      emailSender,
-		smsSender:        &stubSmsSender{},
-		maxRetries:       3,
-		retryIntervalSec: 1,
-		smsEnabled:       true,
-	}
+	serviceInstance := newNotificationServiceWithSendersForSchedulerTests(database, emailSender, &stubSmsSender{})
+	serviceInstance.maxRetries = 3
 
 	future := time.Now().UTC().Add(5 * time.Minute)
 	response, err := serviceInstance.SendNotification(tenantContext(), model.NotificationRequest{
@@ -604,4 +535,17 @@ func openIsolatedDatabase(t *testing.T) *gorm.DB {
 
 func durationPointer(value time.Duration) *time.Duration {
 	return &value
+}
+
+func newNotificationServiceWithSendersForSchedulerTests(database *gorm.DB, emailSender EmailSender, smsSender SmsSender) *notificationServiceImpl {
+	return &notificationServiceImpl{
+		database:           database,
+		logger:             slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
+		defaultEmailSender: emailSender,
+		defaultSmsSender:   smsSender,
+		maxRetries:         5,
+		retryIntervalSec:   1,
+		emailSenders:       make(map[string]EmailSender),
+		smsSenders:         make(map[string]SmsSender),
+	}
 }
