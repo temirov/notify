@@ -49,4 +49,12 @@ test.describe('Landing page auth flow', () => {
       expect(headerBase).not.toBe('');
     }
   });
+
+  test('updates header brand label with tenant display name', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForFunction((expected) => {
+      const header = document.querySelector('mpr-header');
+      return header && header.getAttribute('brand-label') === expected;
+    }, 'Playwright Tenant');
+  });
 });
