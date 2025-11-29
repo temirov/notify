@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"errors"
 	"io"
 	"testing"
@@ -48,7 +47,7 @@ func TestListNotificationsFiltersByStatus(t *testing.T) {
 	})
 
 	responses, err := serviceInstance.ListNotifications(
-		context.Background(),
+		tenantContext(),
 		model.NotificationListFilters{Statuses: []model.NotificationStatus{model.StatusQueued, model.StatusErrored, model.StatusErrored}},
 	)
 	if err != nil {
@@ -87,7 +86,7 @@ func TestRescheduleNotificationUpdatesQueuedRecord(t *testing.T) {
 	})
 
 	future := time.Now().UTC().Add(30 * time.Minute)
-	response, err := serviceInstance.RescheduleNotification(context.Background(), "notif-reschedulable", future)
+	response, err := serviceInstance.RescheduleNotification(tenantContext(), "notif-reschedulable", future)
 	if err != nil {
 		t.Fatalf("reschedule error: %v", err)
 	}
@@ -98,7 +97,7 @@ func TestRescheduleNotificationUpdatesQueuedRecord(t *testing.T) {
 		t.Fatalf("scheduled time mismatch: want %s got %s", future.UTC(), response.ScheduledFor.UTC())
 	}
 
-	stored, fetchErr := model.GetNotificationByID(context.Background(), database, "notif-reschedulable")
+	stored, fetchErr := model.GetNotificationByID(tenantContext(), database, testTenantID, "notif-reschedulable")
 	if fetchErr != nil {
 		t.Fatalf("fetch error: %v", fetchErr)
 	}
@@ -125,12 +124,12 @@ func TestRescheduleNotificationRejectsInvalidStates(t *testing.T) {
 	})
 
 	past := time.Now().UTC().Add(-5 * time.Minute)
-	if _, err := serviceInstance.RescheduleNotification(context.Background(), "notif-sent", past); !errors.Is(err, ErrScheduleInPast) {
+	if _, err := serviceInstance.RescheduleNotification(tenantContext(), "notif-sent", past); !errors.Is(err, ErrScheduleInPast) {
 		t.Fatalf("expected ErrScheduleInPast, got %v", err)
 	}
 
 	future := time.Now().UTC().Add(10 * time.Minute)
-	if _, err := serviceInstance.RescheduleNotification(context.Background(), "notif-sent", future); !errors.Is(err, ErrNotificationNotEditable) {
+	if _, err := serviceInstance.RescheduleNotification(tenantContext(), "notif-sent", future); !errors.Is(err, ErrNotificationNotEditable) {
 		t.Fatalf("expected ErrNotificationNotEditable, got %v", err)
 	}
 }
@@ -152,7 +151,7 @@ func TestCancelNotificationTransitionsStatus(t *testing.T) {
 		UpdatedAt:        now,
 	})
 
-	response, err := serviceInstance.CancelNotification(context.Background(), "notif-cancel")
+	response, err := serviceInstance.CancelNotification(tenantContext(), "notif-cancel")
 	if err != nil {
 		t.Fatalf("cancel error: %v", err)
 	}
@@ -163,7 +162,7 @@ func TestCancelNotificationTransitionsStatus(t *testing.T) {
 		t.Fatalf("expected scheduled time cleared on cancellation")
 	}
 
-	stored, fetchErr := model.GetNotificationByID(context.Background(), database, "notif-cancel")
+	stored, fetchErr := model.GetNotificationByID(tenantContext(), database, testTenantID, "notif-cancel")
 	if fetchErr != nil {
 		t.Fatalf("fetch error: %v", fetchErr)
 	}
@@ -192,7 +191,7 @@ func TestCancelNotificationRejectsNonQueued(t *testing.T) {
 		UpdatedAt:        now,
 	})
 
-	if _, err := serviceInstance.CancelNotification(context.Background(), "notif-sent"); !errors.Is(err, ErrNotificationNotEditable) {
+	if _, err := serviceInstance.CancelNotification(tenantContext(), "notif-sent"); !errors.Is(err, ErrNotificationNotEditable) {
 		t.Fatalf("expected ErrNotificationNotEditable, got %v", err)
 	}
 }
@@ -211,6 +210,9 @@ func newNotificationServiceForDomainTests(database *gorm.DB) *notificationServic
 
 func insertNotificationRecord(t *testing.T, database *gorm.DB, record model.Notification) {
 	t.Helper()
+	if record.TenantID == "" {
+		record.TenantID = testTenantID
+	}
 
 	if record.CreatedAt.IsZero() {
 		record.CreatedAt = time.Now().UTC()
@@ -218,7 +220,7 @@ func insertNotificationRecord(t *testing.T, database *gorm.DB, record model.Noti
 	if record.UpdatedAt.IsZero() {
 		record.UpdatedAt = record.CreatedAt
 	}
-	if err := model.CreateNotification(context.Background(), database, &record); err != nil {
+	if err := model.CreateNotification(tenantContext(), database, &record); err != nil {
 		t.Fatalf("create notification error: %v", err)
 	}
 }

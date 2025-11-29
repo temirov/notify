@@ -31,7 +31,7 @@ func TestNewNotificationServiceLogsWhenSmsDisabled(t *testing.T) {
 		OperationTimeoutSec:  7,
 	}
 
-	service := NewNotificationService(&gorm.DB{}, logger, cfg)
+	service := NewNotificationService(&gorm.DB{}, logger, cfg, nil)
 	if service == nil {
 		t.Fatalf("expected service instance")
 	}
