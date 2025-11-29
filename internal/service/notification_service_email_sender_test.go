@@ -33,7 +33,7 @@ func TestNewNotificationServiceUsesSMTPEmailSender(t *testing.T) {
 		OperationTimeoutSec:  10,
 	}
 
-	serviceInstance := NewNotificationService(database, logger, configuration)
+	serviceInstance := NewNotificationService(database, logger, configuration, nil)
 	concrete, ok := serviceInstance.(*notificationServiceImpl)
 	if !ok {
 		t.Fatalf("unexpected service implementation type %T", serviceInstance)

@@ -7,32 +7,67 @@ import (
 	"time"
 
 	"github.com/temirov/pinguin/internal/model"
+	"github.com/temirov/pinguin/internal/tenant"
 	"github.com/temirov/pinguin/pkg/scheduler"
 	"gorm.io/gorm"
 )
 
 type notificationRetryStore struct {
-	database *gorm.DB
+	database   *gorm.DB
+	tenantRepo *tenant.Repository
 }
 
-func newNotificationRetryStore(database *gorm.DB) *notificationRetryStore {
-	return &notificationRetryStore{database: database}
+func newNotificationRetryStore(database *gorm.DB, tenantRepo *tenant.Repository) *notificationRetryStore {
+	return &notificationRetryStore{database: database, tenantRepo: tenantRepo}
 }
 
 func (store *notificationRetryStore) PendingJobs(ctx context.Context, maxRetries int, now time.Time) ([]scheduler.Job, error) {
-	records, err := model.GetQueuedOrFailedNotifications(ctx, store.database, maxRetries, now)
+	if store.tenantRepo == nil {
+		return store.pendingJobsAll(ctx, maxRetries, now)
+	}
+	tenants, err := store.tenantRepo.ListActiveTenants(ctx)
 	if err != nil {
 		return nil, err
 	}
-	jobs := make([]scheduler.Job, 0, len(records))
-	for index := range records {
-		record := records[index]
+	var jobs []scheduler.Job
+	for _, tenantRecord := range tenants {
+		records, err := model.GetQueuedOrFailedNotifications(ctx, store.database, tenantRecord.ID, maxRetries, now)
+		if err != nil {
+			return nil, err
+		}
+		for index := range records {
+			record := records[index]
+			jobs = append(jobs, scheduler.Job{
+				ID:              record.NotificationID,
+				ScheduledFor:    record.ScheduledFor,
+				RetryCount:      record.RetryCount,
+				LastAttemptedAt: record.LastAttemptedAt,
+				Payload:         &records[index],
+			})
+		}
+	}
+	return jobs, nil
+}
+
+func (store *notificationRetryStore) pendingJobsAll(ctx context.Context, maxRetries int, now time.Time) ([]scheduler.Job, error) {
+	var notifications []model.Notification
+	err := store.database.WithContext(ctx).
+		Preload("Attachments").
+		Where("(status = ? OR status = ? OR status = ?) AND retry_count < ? AND (scheduled_for IS NULL OR scheduled_for <= ?)",
+			model.StatusQueued, model.StatusErrored, model.StatusFailed, maxRetries, now).
+		Find(&notifications).Error
+	if err != nil {
+		return nil, err
+	}
+	jobs := make([]scheduler.Job, 0, len(notifications))
+	for index := range notifications {
+		record := notifications[index]
 		jobs = append(jobs, scheduler.Job{
 			ID:              record.NotificationID,
 			ScheduledFor:    record.ScheduledFor,
 			RetryCount:      record.RetryCount,
 			LastAttemptedAt: record.LastAttemptedAt,
-			Payload:         &records[index],
+			Payload:         &notifications[index],
 		})
 	}
 	return jobs, nil

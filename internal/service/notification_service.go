@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/temirov/pinguin/internal/config"
 	"github.com/temirov/pinguin/internal/model"
+	"github.com/temirov/pinguin/internal/tenant"
 	"github.com/temirov/pinguin/pkg/scheduler"
 	"gorm.io/gorm"
-	"log/slog"
 )
 
 // NotificationService defines the external interface for processing notifications.
@@ -34,6 +35,7 @@ var (
 	ErrSMSDisabled             = errors.New("sms delivery disabled: missing Twilio credentials")
 	ErrScheduleInPast          = errors.New("notification schedule must be in the future")
 	ErrNotificationNotEditable = errors.New("notification must be queued before editing")
+	ErrMissingTenantContext    = errors.New("tenant context missing")
 )
 
 const (
@@ -46,6 +48,7 @@ const (
 type notificationServiceImpl struct {
 	database         *gorm.DB
 	logger           *slog.Logger
+	tenantRepo       *tenant.Repository
 	emailSender      EmailSender
 	smsSender        SmsSender
 	maxRetries       int
@@ -54,8 +57,8 @@ type notificationServiceImpl struct {
 }
 
 // NewNotificationService creates a NotificationService backed by SMTP/Twilio senders.
-func NewNotificationService(db *gorm.DB, logger *slog.Logger, cfg config.Config) NotificationService {
-	return NewNotificationServiceWithSenders(db, logger, cfg, nil, nil)
+func NewNotificationService(db *gorm.DB, logger *slog.Logger, cfg config.Config, tenantRepo *tenant.Repository) NotificationService {
+	return NewNotificationServiceWithSenders(db, logger, cfg, tenantRepo, nil, nil)
 }
 
 // NewNotificationServiceWithSenders allows callers (primarily tests) to provide custom senders.
@@ -63,6 +66,7 @@ func NewNotificationServiceWithSenders(
 	db *gorm.DB,
 	logger *slog.Logger,
 	cfg config.Config,
+	tenantRepo *tenant.Repository,
 	emailSender EmailSender,
 	smsSender SmsSender,
 ) NotificationService {
@@ -93,6 +97,7 @@ func NewNotificationServiceWithSenders(
 	return &notificationServiceImpl{
 		database:         db,
 		logger:           logger,
+		tenantRepo:       tenantRepo,
 		emailSender:      emailSender,
 		smsSender:        resolvedSmsSender,
 		maxRetries:       cfg.MaxRetries,
@@ -102,6 +107,11 @@ func NewNotificationServiceWithSenders(
 }
 
 func (serviceInstance *notificationServiceImpl) SendNotification(ctx context.Context, request model.NotificationRequest) (model.NotificationResponse, error) {
+	runtimeCfg, err := serviceInstance.requireTenant(ctx)
+	if err != nil {
+		return model.NotificationResponse{}, err
+	}
+	request.TenantID = runtimeCfg.Tenant.ID
 	if request.Recipient == "" || request.Message == "" {
 		serviceInstance.logger.Error("Missing required fields", "recipient", request.Recipient, "message", request.Message)
 		return model.NotificationResponse{}, fmt.Errorf("missing required fields: recipient or message")
@@ -180,11 +190,15 @@ func (serviceInstance *notificationServiceImpl) SendNotification(ctx context.Con
 }
 
 func (serviceInstance *notificationServiceImpl) GetNotificationStatus(ctx context.Context, notificationID string) (model.NotificationResponse, error) {
+	runtimeCfg, err := serviceInstance.requireTenant(ctx)
+	if err != nil {
+		return model.NotificationResponse{}, err
+	}
 	if notificationID == "" {
 		serviceInstance.logger.Error("Missing notification_id")
 		return model.NotificationResponse{}, fmt.Errorf("missing notification_id")
 	}
-	notificationRecord, retrievalError := model.MustGetNotificationByID(ctx, serviceInstance.database, notificationID)
+	notificationRecord, retrievalError := model.MustGetNotificationByID(ctx, serviceInstance.database, runtimeCfg.Tenant.ID, notificationID)
 	if retrievalError != nil {
 		serviceInstance.logger.Error("Failed to retrieve notification", "error", retrievalError)
 		return model.NotificationResponse{}, retrievalError
@@ -193,7 +207,11 @@ func (serviceInstance *notificationServiceImpl) GetNotificationStatus(ctx contex
 }
 
 func (serviceInstance *notificationServiceImpl) ListNotifications(ctx context.Context, filters model.NotificationListFilters) ([]model.NotificationResponse, error) {
-	records, err := model.ListNotifications(ctx, serviceInstance.database, filters)
+	runtimeCfg, err := serviceInstance.requireTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
+	records, err := model.ListNotifications(ctx, serviceInstance.database, runtimeCfg.Tenant.ID, filters)
 	if err != nil {
 		serviceInstance.logger.Error("Failed to list notifications", "error", err)
 		return nil, err
@@ -206,6 +224,10 @@ func (serviceInstance *notificationServiceImpl) ListNotifications(ctx context.Co
 }
 
 func (serviceInstance *notificationServiceImpl) RescheduleNotification(ctx context.Context, notificationID string, scheduledFor time.Time) (model.NotificationResponse, error) {
+	runtimeCfg, err := serviceInstance.requireTenant(ctx)
+	if err != nil {
+		return model.NotificationResponse{}, err
+	}
 	trimmedID := strings.TrimSpace(notificationID)
 	if trimmedID == "" {
 		return model.NotificationResponse{}, fmt.Errorf("missing notification_id")
@@ -215,7 +237,7 @@ func (serviceInstance *notificationServiceImpl) RescheduleNotification(ctx conte
 		serviceInstance.logger.Warn("Rejecting reschedule because schedule is in the past", "notification_id", trimmedID, "scheduled_for", normalizedSchedule)
 		return model.NotificationResponse{}, ErrScheduleInPast
 	}
-	existingNotification, fetchErr := model.MustGetNotificationByID(ctx, serviceInstance.database, trimmedID)
+	existingNotification, fetchErr := model.MustGetNotificationByID(ctx, serviceInstance.database, runtimeCfg.Tenant.ID, trimmedID)
 	if fetchErr != nil {
 		serviceInstance.logger.Error("Failed to fetch notification for reschedule", "notification_id", trimmedID, "error", fetchErr)
 		return model.NotificationResponse{}, fetchErr
@@ -235,11 +257,15 @@ func (serviceInstance *notificationServiceImpl) RescheduleNotification(ctx conte
 }
 
 func (serviceInstance *notificationServiceImpl) CancelNotification(ctx context.Context, notificationID string) (model.NotificationResponse, error) {
+	runtimeCfg, err := serviceInstance.requireTenant(ctx)
+	if err != nil {
+		return model.NotificationResponse{}, err
+	}
 	trimmedID := strings.TrimSpace(notificationID)
 	if trimmedID == "" {
 		return model.NotificationResponse{}, fmt.Errorf("missing notification_id")
 	}
-	existingNotification, fetchErr := model.MustGetNotificationByID(ctx, serviceInstance.database, trimmedID)
+	existingNotification, fetchErr := model.MustGetNotificationByID(ctx, serviceInstance.database, runtimeCfg.Tenant.ID, trimmedID)
 	if fetchErr != nil {
 		serviceInstance.logger.Error("Failed to fetch notification for cancellation", "notification_id", trimmedID, "error", fetchErr)
 		return model.NotificationResponse{}, fetchErr
@@ -260,7 +286,7 @@ func (serviceInstance *notificationServiceImpl) CancelNotification(ctx context.C
 
 func (serviceInstance *notificationServiceImpl) StartRetryWorker(ctx context.Context) {
 	worker, workerErr := scheduler.NewWorker(scheduler.Config{
-		Repository:    newNotificationRetryStore(serviceInstance.database),
+		Repository:    newNotificationRetryStore(serviceInstance.database, serviceInstance.tenantRepo),
 		Dispatcher:    newNotificationDispatcher(serviceInstance),
 		Logger:        serviceInstance.logger,
 		Interval:      time.Duration(serviceInstance.retryIntervalSec) * time.Second,
@@ -318,4 +344,12 @@ func normalizeAttachments(notificationType model.NotificationType, attachments [
 		return nil, fmt.Errorf("attachments exceed total limit of %d bytes", maxTotalAttachmentSizeBytes)
 	}
 	return normalized, nil
+}
+
+func (serviceInstance *notificationServiceImpl) requireTenant(ctx context.Context) (tenant.RuntimeConfig, error) {
+	runtimeCfg, ok := tenant.RuntimeFromContext(ctx)
+	if !ok {
+		return tenant.RuntimeConfig{}, ErrMissingTenantContext
+	}
+	return runtimeCfg, nil
 }
