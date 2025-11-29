@@ -356,6 +356,7 @@ Configuration values are read from environment variables prefixed with `PINGUIN_
 | --- | --- | --- |
 | `PINGUIN_GRPC_SERVER_ADDR` | Target gRPC endpoint | `localhost:50051` |
 | `PINGUIN_GRPC_AUTH_TOKEN` | Bearer token used for authentication | _required_ |
+| `PINGUIN_TENANT_ID` | Tenant identifier for the authenticated user | _required_ |
 | `PINGUIN_CONNECTION_TIMEOUT_SEC` | Dial timeout in seconds | `5` |
 | `PINGUIN_OPERATION_TIMEOUT_SEC` | Per-command timeout in seconds | `30` |
 | `PINGUIN_LOG_LEVEL` | CLI log level (`DEBUG`, `INFO`, `WARN`, `ERROR`) | `INFO` |
@@ -364,6 +365,7 @@ Example command that schedules an email:
 
 ```bash
 PINGUIN_GRPC_AUTH_TOKEN=my-secret-token \
+PINGUIN_TENANT_ID=tenant-acme \
 ./pinguin-cli send \
   --type email \
   --recipient someone@example.com \
@@ -376,6 +378,7 @@ Attachments are added with the repeatable `--attachment` flag. Each value accept
 
 ```bash
 PINGUIN_GRPC_AUTH_TOKEN=my-secret-token \
+PINGUIN_TENANT_ID=tenant-acme \
 ./pinguin-cli send \
   --type email \
   --recipient someone@example.com \
@@ -390,6 +393,8 @@ PINGUIN_GRPC_AUTH_TOKEN=my-secret-token \
 A lightweight client test application lives under `tests/clientcli` (no extra module). This client wraps the gRPC calls and demonstrates sending a notification. To run the client test, use:
 
 ```bash
+TENANT_ID=tenant-acme \
+GRPC_AUTH_TOKEN=my-secret-token \
 go run ./tests/clientcli \
   --to your-email@yourdomain.com \
   --subject "Test Email" \
