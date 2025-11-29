@@ -17,11 +17,13 @@ type Config struct {
 	MaxRetries       int
 	RetryIntervalSec int
 
+	MasterEncryptionKey string
+	TenantConfigPath    string
+
 	WebInterfaceEnabled bool
 	HTTPListenAddr      string
 	HTTPStaticRoot      string
 	HTTPAllowedOrigins  []string
-	AdminEmails         []string
 
 	TAuthSigningKey string
 	TAuthIssuer     string
@@ -55,6 +57,8 @@ func LoadConfig(disableWebInterface bool) (Config, error) {
 		loadEnvString("LOG_LEVEL", &configuration.LogLevel),
 		loadEnvInt("MAX_RETRIES", &configuration.MaxRetries),
 		loadEnvInt("RETRY_INTERVAL_SEC", &configuration.RetryIntervalSec),
+		loadEnvString("MASTER_ENCRYPTION_KEY", &configuration.MasterEncryptionKey),
+		loadEnvString("TENANT_CONFIG_PATH", &configuration.TenantConfigPath),
 		loadEnvString("SMTP_USERNAME", &configuration.SMTPUsername),
 		loadEnvString("SMTP_PASSWORD", &configuration.SMTPPassword),
 		loadEnvString("SMTP_HOST", &configuration.SMTPHost),
@@ -101,15 +105,6 @@ func LoadConfig(disableWebInterface bool) (Config, error) {
 		}
 		configuration.HTTPAllowedOrigins = parseCSV(os.Getenv("HTTP_ALLOWED_ORIGINS"))
 
-		adminListRaw := strings.TrimSpace(os.Getenv("ADMINS"))
-		if adminListRaw == "" {
-			return Config{}, fmt.Errorf("configuration errors: missing admin emails")
-		}
-		configuration.AdminEmails = parseCSV(adminListRaw)
-		if len(configuration.AdminEmails) == 0 {
-			return Config{}, fmt.Errorf("configuration errors: missing admin emails")
-		}
-
 		configuration.TAuthCookieName = strings.TrimSpace(os.Getenv("TAUTH_COOKIE_NAME"))
 		if configuration.TAuthCookieName == "" {
 			configuration.TAuthCookieName = "app_session"
@@ -117,7 +112,6 @@ func LoadConfig(disableWebInterface bool) (Config, error) {
 	} else {
 		configuration.HTTPStaticRoot = ""
 		configuration.HTTPAllowedOrigins = nil
-		configuration.AdminEmails = nil
 		configuration.TAuthCookieName = ""
 	}
 

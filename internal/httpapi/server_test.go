@@ -11,20 +11,24 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/temirov/pinguin/internal/model"
 	"github.com/temirov/pinguin/internal/service"
+	"github.com/temirov/pinguin/internal/tenant"
 	sessionvalidator "github.com/tyemirov/tauth/pkg/sessionvalidator"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 	"log/slog"
 )
 
 func TestListNotificationsRequiresAuth(t *testing.T) {
 	t.Helper()
 
-	server := newTestHTTPServer(t, &stubNotificationService{}, &stubValidator{err: errors.New("unauthorized")})
+	server := newTestHTTPServer(t, &stubNotificationService{}, &stubValidator{err: errors.New("unauthorized")}, []string{"user@example.com"})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/notifications", nil)
 
@@ -39,12 +43,13 @@ func TestSessionMiddlewareRejectsNonAdmins(t *testing.T) {
 
 	stubSvc := &stubNotificationService{}
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+	repo := newTestTenantRepository(t, []string{"admin@example.com"})
 	server, err := NewServer(Config{
 		ListenAddr:          ":0",
 		NotificationService: stubSvc,
 		SessionValidator:    &stubValidator{email: "guest@example.com"},
+		TenantRepository:    repo,
 		Logger:              logger,
-		AdminEmails:         []string{"admin@example.com"},
 	})
 	if err != nil {
 		t.Fatalf("server init error: %v", err)
@@ -68,7 +73,7 @@ func TestListNotificationsReturnsData(t *testing.T) {
 			{NotificationID: "errored", Status: model.StatusErrored},
 		},
 	}
-	server := newTestHTTPServer(t, stubSvc, &stubValidator{})
+	server := newTestHTTPServer(t, stubSvc, &stubValidator{}, []string{"user@example.com"})
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/notifications?status=queued&status=errored", nil)
@@ -92,7 +97,7 @@ func TestListNotificationsReturnsData(t *testing.T) {
 func TestRescheduleValidation(t *testing.T) {
 	t.Helper()
 
-	server := newTestHTTPServer(t, &stubNotificationService{}, &stubValidator{})
+	server := newTestHTTPServer(t, &stubNotificationService{}, &stubValidator{}, []string{"user@example.com"})
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPatch, "/api/notifications/notif-1/schedule", bytes.NewBufferString(`{}`))
@@ -108,7 +113,7 @@ func TestRescheduleNotificationRejectsEmptyID(t *testing.T) {
 	t.Helper()
 
 	stubSvc := &stubNotificationService{}
-	server := newTestHTTPServer(t, stubSvc, &stubValidator{})
+	server := newTestHTTPServer(t, stubSvc, &stubValidator{}, []string{"user@example.com"})
 
 	recorder := httptest.NewRecorder()
 	requestBody := `{"scheduled_time":"2024-01-02T15:04:05Z"}`
@@ -129,7 +134,7 @@ func TestRescheduleNotificationMapsMissingIDErrorToBadRequest(t *testing.T) {
 	t.Helper()
 
 	stubSvc := &stubNotificationService{rescheduleErr: fmt.Errorf("missing notification_id")}
-	server := newTestHTTPServer(t, stubSvc, &stubValidator{})
+	server := newTestHTTPServer(t, stubSvc, &stubValidator{}, []string{"user@example.com"})
 
 	recorder := httptest.NewRecorder()
 	requestBody := `{"scheduled_time":"2024-01-02T15:04:05Z"}`
@@ -178,7 +183,7 @@ func TestCancelNotificationErrorMapping(t *testing.T) {
 			t.Helper()
 
 			stubSvc := &stubNotificationService{cancelErr: testCase.cancelError}
-			server := newTestHTTPServer(t, stubSvc, &stubValidator{})
+			server := newTestHTTPServer(t, stubSvc, &stubValidator{}, []string{"user@example.com"})
 
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodPost, "/api/notifications/notif-1/cancel", nil)
@@ -195,7 +200,7 @@ func TestCancelNotificationRejectsEmptyID(t *testing.T) {
 	t.Helper()
 
 	stubSvc := &stubNotificationService{}
-	server := newTestHTTPServer(t, stubSvc, &stubValidator{})
+	server := newTestHTTPServer(t, stubSvc, &stubValidator{}, []string{"user@example.com"})
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/notifications/%20/cancel", nil)
@@ -220,13 +225,14 @@ func TestNewServerSupportsStaticRootAfterAPIRoutes(t *testing.T) {
 	}
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+	tenantRepo := newTestTenantRepository(t, []string{"user@example.com"})
 	server, err := NewServer(Config{
 		ListenAddr:          ":0",
 		StaticRoot:          tempDir,
 		NotificationService: &stubNotificationService{},
 		SessionValidator:    &stubValidator{},
+		TenantRepository:    tenantRepo,
 		Logger:              logger,
-		AdminEmails:         []string{"user@example.com"},
 	})
 	if err != nil {
 		t.Fatalf("server init error: %v", err)
@@ -293,12 +299,13 @@ func TestRuntimeConfigEndpointReturnsValues(t *testing.T) {
 	t.Helper()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+	tenantRepo := newTestTenantRepository(t, []string{"user@example.com"})
 	server, err := NewServer(Config{
 		ListenAddr:          ":0",
 		NotificationService: &stubNotificationService{},
 		SessionValidator:    &stubValidator{},
+		TenantRepository:    tenantRepo,
 		Logger:              logger,
-		AdminEmails:         []string{"user@example.com"},
 	})
 	if err != nil {
 		t.Fatalf("server init error: %v", err)
@@ -313,6 +320,15 @@ func TestRuntimeConfigEndpointReturnsValues(t *testing.T) {
 	}
 	var payload struct {
 		APIBaseURL string `json:"apiBaseUrl"`
+		Tenant     struct {
+			ID          string `json:"id"`
+			Slug        string `json:"slug"`
+			DisplayName string `json:"displayName"`
+			Identity    struct {
+				GoogleClientID string `json:"googleClientId"`
+				TAuthBaseURL   string `json:"tauthBaseUrl"`
+			} `json:"identity"`
+		} `json:"tenant"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode error: %v", err)
@@ -320,23 +336,89 @@ func TestRuntimeConfigEndpointReturnsValues(t *testing.T) {
 	if payload.APIBaseURL != "http://example.com/api" {
 		t.Fatalf("unexpected api base %q", payload.APIBaseURL)
 	}
+	if payload.Tenant.Slug != "test" || payload.Tenant.Identity.GoogleClientID == "" {
+		t.Fatalf("unexpected tenant payload %+v", payload.Tenant)
+	}
 }
 
-func newTestHTTPServer(t *testing.T, svc service.NotificationService, validator SessionValidator) *Server {
+func newTestHTTPServer(t *testing.T, svc service.NotificationService, validator SessionValidator, admins []string) *Server {
 	t.Helper()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+	repo := newTestTenantRepository(t, admins)
 	server, err := NewServer(Config{
 		ListenAddr:          ":0",
 		NotificationService: svc,
 		SessionValidator:    validator,
+		TenantRepository:    repo,
 		Logger:              logger,
-		AdminEmails:         []string{"user@example.com"},
 	})
 	if err != nil {
 		t.Fatalf("server init error: %v", err)
 	}
 	return server
+}
+
+func newTestTenantRepository(t *testing.T, admins []string) *tenant.Repository {
+	t.Helper()
+	keeper, err := tenant.NewSecretKeeper(strings.Repeat("a", 64))
+	if err != nil {
+		t.Fatalf("secret keeper error: %v", err)
+	}
+	dbInstance, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if err := dbInstance.AutoMigrate(
+		&tenant.Tenant{},
+		&tenant.TenantDomain{},
+		&tenant.TenantMember{},
+		&tenant.TenantIdentity{},
+		&tenant.EmailProfile{},
+		&tenant.SMSProfile{},
+	); err != nil {
+		t.Fatalf("migrate sqlite: %v", err)
+	}
+	var members []tenant.BootstrapMember
+	for _, email := range admins {
+		members = append(members, tenant.BootstrapMember{Email: email, Role: "admin"})
+	}
+	cfg := tenant.BootstrapConfig{
+		Tenants: []tenant.BootstrapTenant{
+			{
+				ID:           "tenant-test",
+				Slug:         "test",
+				DisplayName:  "Test Tenant",
+				SupportEmail: "support@example.com",
+				Status:       string(tenant.TenantStatusActive),
+				Domains:      []string{"example.com"},
+				Admins:       members,
+				Identity: tenant.BootstrapIdentity{
+					GoogleClientID: "client-id",
+					TAuthBaseURL:   "https://tauth.example.com",
+				},
+				EmailProfile: tenant.BootstrapEmailProfile{
+					Host:        "smtp.example.com",
+					Port:        587,
+					Username:    "smtp-user",
+					Password:    "smtp-pass",
+					FromAddress: "noreply@example.com",
+				},
+			},
+		},
+	}
+	payload, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal bootstrap config: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "tenants.json")
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatalf("write bootstrap config: %v", err)
+	}
+	if err := tenant.BootstrapFromFile(context.Background(), dbInstance, keeper, path); err != nil {
+		t.Fatalf("bootstrap tenants: %v", err)
+	}
+	return tenant.NewRepository(dbInstance, keeper)
 }
 
 type stubValidator struct {
