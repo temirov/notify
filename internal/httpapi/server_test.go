@@ -94,6 +94,50 @@ func TestListNotificationsReturnsData(t *testing.T) {
 	}
 }
 
+func TestListNotificationsScopesByTenantHost(t *testing.T) {
+	t.Helper()
+
+	repo := newMultiTenantRepository(t)
+	stubSvc := &stubNotificationService{
+		listResponse: []model.NotificationResponse{},
+	}
+	server := newTestHTTPServerWithRepo(t, stubSvc, &stubValidator{}, repo)
+
+	alphaReq := httptest.NewRequest(http.MethodGet, "/api/notifications", nil)
+	alphaReq.Host = "alpha.localhost"
+	alphaRec := httptest.NewRecorder()
+	server.httpServer.Handler.ServeHTTP(alphaRec, alphaReq)
+	if alphaRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for alpha, got %d", alphaRec.Code)
+	}
+	if stubSvc.lastTenantID != "tenant-alpha" {
+		t.Fatalf("expected tenant-alpha, got %s", stubSvc.lastTenantID)
+	}
+
+	bravoReq := httptest.NewRequest(http.MethodGet, "/api/notifications", nil)
+	bravoReq.Host = "bravo.localhost"
+	bravoRec := httptest.NewRecorder()
+	server.httpServer.Handler.ServeHTTP(bravoRec, bravoReq)
+	if bravoRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for bravo, got %d", bravoRec.Code)
+	}
+	if stubSvc.lastTenantID != "tenant-bravo" {
+		t.Fatalf("expected tenant-bravo, got %s", stubSvc.lastTenantID)
+	}
+
+	unknownReq := httptest.NewRequest(http.MethodGet, "/api/notifications", nil)
+	unknownReq.Host = "unknown.localhost"
+	unknownRec := httptest.NewRecorder()
+	currentCalls := stubSvc.listCalls
+	server.httpServer.Handler.ServeHTTP(unknownRec, unknownReq)
+	if unknownRec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for unknown host, got %d", unknownRec.Code)
+	}
+	if stubSvc.listCalls != currentCalls {
+		t.Fatalf("service should not be called for unknown host")
+	}
+}
+
 func TestRescheduleValidation(t *testing.T) {
 	t.Helper()
 
@@ -341,11 +385,82 @@ func TestRuntimeConfigEndpointReturnsValues(t *testing.T) {
 	}
 }
 
+func TestRuntimeConfigResolvesPerHost(t *testing.T) {
+	t.Helper()
+
+	repo := newMultiTenantRepository(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+	server, err := NewServer(Config{
+		ListenAddr:          ":0",
+		NotificationService: &stubNotificationService{},
+		SessionValidator:    &stubValidator{},
+		TenantRepository:    repo,
+		Logger:              logger,
+	})
+	if err != nil {
+		t.Fatalf("server init error: %v", err)
+	}
+
+	checkHost := func(host string, expectedSlug string) {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "/runtime-config", nil)
+		request.Host = host
+		server.httpServer.Handler.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("expected 200 for host %s, got %d", host, recorder.Code)
+		}
+		var payload struct {
+			Tenant struct {
+				Slug string `json:"slug"`
+			} `json:"tenant"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decode error: %v", err)
+		}
+		if payload.Tenant.Slug != expectedSlug {
+			t.Fatalf("host %s resolved slug %s", host, payload.Tenant.Slug)
+		}
+	}
+
+	checkHost("alpha.localhost", "alpha")
+	checkHost("bravo.localhost", "bravo")
+}
+
+func TestRuntimeConfigRejectsUnknownHost(t *testing.T) {
+	t.Helper()
+
+	repo := newMultiTenantRepository(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+	server, err := NewServer(Config{
+		ListenAddr:          ":0",
+		NotificationService: &stubNotificationService{},
+		SessionValidator:    &stubValidator{},
+		TenantRepository:    repo,
+		Logger:              logger,
+	})
+	if err != nil {
+		t.Fatalf("server init error: %v", err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/runtime-config", nil)
+	request.Host = "unknown.localhost"
+	server.httpServer.Handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for unknown host, got %d", recorder.Code)
+	}
+}
+
 func newTestHTTPServer(t *testing.T, svc service.NotificationService, validator SessionValidator, admins []string) *Server {
+	t.Helper()
+	repo := newTestTenantRepository(t, admins)
+	return newTestHTTPServerWithRepo(t, svc, validator, repo)
+}
+
+func newTestHTTPServerWithRepo(t *testing.T, svc service.NotificationService, validator SessionValidator, repo *tenant.Repository) *Server {
 	t.Helper()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
-	repo := newTestTenantRepository(t, admins)
 	server, err := NewServer(Config{
 		ListenAddr:          ":0",
 		NotificationService: svc,
@@ -361,24 +476,6 @@ func newTestHTTPServer(t *testing.T, svc service.NotificationService, validator 
 
 func newTestTenantRepository(t *testing.T, admins []string) *tenant.Repository {
 	t.Helper()
-	keeper, err := tenant.NewSecretKeeper(strings.Repeat("a", 64))
-	if err != nil {
-		t.Fatalf("secret keeper error: %v", err)
-	}
-	dbInstance, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	if err := dbInstance.AutoMigrate(
-		&tenant.Tenant{},
-		&tenant.TenantDomain{},
-		&tenant.TenantMember{},
-		&tenant.TenantIdentity{},
-		&tenant.EmailProfile{},
-		&tenant.SMSProfile{},
-	); err != nil {
-		t.Fatalf("migrate sqlite: %v", err)
-	}
 	var members []tenant.BootstrapMember
 	for _, email := range admins {
 		members = append(members, tenant.BootstrapMember{Email: email, Role: "admin"})
@@ -406,6 +503,84 @@ func newTestTenantRepository(t *testing.T, admins []string) *tenant.Repository {
 				},
 			},
 		},
+	}
+	return bootstrapTenantRepository(t, cfg)
+}
+
+func newMultiTenantRepository(t *testing.T) *tenant.Repository {
+	t.Helper()
+	cfg := tenant.BootstrapConfig{
+		Tenants: []tenant.BootstrapTenant{
+			{
+				ID:           "tenant-alpha",
+				Slug:         "alpha",
+				DisplayName:  "Alpha Corp",
+				SupportEmail: "alpha@example.com",
+				Status:       string(tenant.TenantStatusActive),
+				Domains:      []string{"alpha.localhost"},
+				Admins: []tenant.BootstrapMember{
+					{Email: "admin-alpha@example.com", Role: "admin"},
+					{Email: "user@example.com", Role: "admin"},
+				},
+				Identity: tenant.BootstrapIdentity{
+					GoogleClientID: "alpha-google",
+					TAuthBaseURL:   "https://auth.alpha.localhost",
+				},
+				EmailProfile: tenant.BootstrapEmailProfile{
+					Host:        "smtp.alpha.localhost",
+					Port:        587,
+					Username:    "alpha-smtp",
+					Password:    "alpha-secret",
+					FromAddress: "noreply@alpha.localhost",
+				},
+			},
+			{
+				ID:           "tenant-bravo",
+				Slug:         "bravo",
+				DisplayName:  "Bravo Labs",
+				SupportEmail: "bravo@example.com",
+				Status:       string(tenant.TenantStatusActive),
+				Domains:      []string{"bravo.localhost"},
+				Admins: []tenant.BootstrapMember{
+					{Email: "admin-bravo@example.com", Role: "admin"},
+					{Email: "user@example.com", Role: "admin"},
+				},
+				Identity: tenant.BootstrapIdentity{
+					GoogleClientID: "bravo-google",
+					TAuthBaseURL:   "https://auth.bravo.localhost",
+				},
+				EmailProfile: tenant.BootstrapEmailProfile{
+					Host:        "smtp.bravo.localhost",
+					Port:        2525,
+					Username:    "bravo-smtp",
+					Password:    "bravo-secret",
+					FromAddress: "noreply@bravo.localhost",
+				},
+			},
+		},
+	}
+	return bootstrapTenantRepository(t, cfg)
+}
+
+func bootstrapTenantRepository(t *testing.T, cfg tenant.BootstrapConfig) *tenant.Repository {
+	t.Helper()
+	keeper, err := tenant.NewSecretKeeper(strings.Repeat("a", 64))
+	if err != nil {
+		t.Fatalf("secret keeper error: %v", err)
+	}
+	dbInstance, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if err := dbInstance.AutoMigrate(
+		&tenant.Tenant{},
+		&tenant.TenantDomain{},
+		&tenant.TenantMember{},
+		&tenant.TenantIdentity{},
+		&tenant.EmailProfile{},
+		&tenant.SMSProfile{},
+	); err != nil {
+		t.Fatalf("migrate sqlite: %v", err)
 	}
 	payload, err := json.Marshal(cfg)
 	if err != nil {
@@ -448,6 +623,8 @@ type stubNotificationService struct {
 	cancelErr          error
 	cancelCalls        int
 	lastCancelID       string
+	lastTenantID       string
+	listCalls          int
 }
 
 func (stub *stubNotificationService) SendNotification(context.Context, model.NotificationRequest) (model.NotificationResponse, error) {
@@ -458,7 +635,11 @@ func (stub *stubNotificationService) GetNotificationStatus(context.Context, stri
 	return model.NotificationResponse{}, errors.New("not implemented")
 }
 
-func (stub *stubNotificationService) ListNotifications(context.Context, model.NotificationListFilters) ([]model.NotificationResponse, error) {
+func (stub *stubNotificationService) ListNotifications(ctx context.Context, _ model.NotificationListFilters) ([]model.NotificationResponse, error) {
+	stub.listCalls++
+	if runtimeCfg, ok := tenant.RuntimeFromContext(ctx); ok {
+		stub.lastTenantID = runtimeCfg.Tenant.ID
+	}
 	return stub.listResponse, stub.listErr
 }
 

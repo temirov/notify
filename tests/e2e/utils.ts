@@ -322,16 +322,30 @@ export async function clickHeaderGoogleButton(page: Page) {
 export async function completeHeaderLogin(page: Page) {
   await expectHeaderGoogleButton(page);
   await clickHeaderGoogleButton(page);
+  
+  // Wait for the Google Identity stub to be initialized with a callback
+  await page.waitForFunction(() => {
+    const stub = (window as any).__playwrightGoogle;
+    return stub && typeof stub.callback === 'function';
+  }, undefined, { timeout: 30000 }).catch(() => {
+    throw new Error('Timed out waiting for Google Identity callback to be registered');
+  });
+
   const waitForDashboard = page.url().includes('/dashboard.html')
     ? Promise.resolve()
-    : page.waitForURL('**/dashboard.html', { timeout: 10000 });
+    : page.waitForURL('**/dashboard.html', { timeout: 30000 });
+
   const triggered = await page.evaluate(() => {
     const googleStub = (window as any).__playwrightGoogle;
-    googleStub?.trigger({ credential: 'playwright-token' });
-    return Boolean(googleStub);
+    if (googleStub && googleStub.trigger) {
+      googleStub.trigger({ credential: 'playwright-token' });
+      return true;
+    }
+    return false;
   });
+
   if (!triggered) {
-    throw new Error('Google Identity stub unavailable');
+    throw new Error('Google Identity stub unavailable or failed to trigger');
   }
   await waitForDashboard;
   await expect(page.getByTestId('notifications-table')).toBeVisible();
