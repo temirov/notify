@@ -151,16 +151,16 @@ func TestHTTPMultitenantIsolation(t *testing.T) {
 	// We might need to expose Handler or use a real port.
 	// Using a real port is flaky (port conflicts).
 	// Checking `internal/httpapi/server.go` again...
-	
+
 	// If I cannot access the handler, I have to rely on `Start()` and `Shutdown()`.
 	// Or I can modify `httpapi` to verify.
 	// OR I can just use `Start()` on a random port.
-	
+
 	go func() {
 		_ = server.Start()
 	}()
 	defer func() { _ = server.Shutdown(context.Background()) }()
-	
+
 	// Give it a moment to start? Or rely on retry?
 	time.Sleep(100 * time.Millisecond) // Brittle but simple for now.
 
