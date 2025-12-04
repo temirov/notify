@@ -2,8 +2,46 @@ package tenant
 
 import (
 	"context"
+	"io"
+	"log"
+	"sync"
 	"testing"
+	"time"
+
+	"gorm.io/gorm/logger"
 )
+
+type queryCounter struct {
+	logger.Interface
+	mutex   sync.Mutex
+	queries int
+}
+
+func newQueryCounter() *queryCounter {
+	baseLogger := logger.New(log.New(io.Discard, "", log.LstdFlags), logger.Config{
+		LogLevel: logger.Silent,
+	})
+	return &queryCounter{Interface: baseLogger}
+}
+
+func (counter *queryCounter) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
+	counter.mutex.Lock()
+	counter.queries++
+	counter.mutex.Unlock()
+	counter.Interface.Trace(ctx, begin, fc, err)
+}
+
+func (counter *queryCounter) Count() int {
+	counter.mutex.Lock()
+	defer counter.mutex.Unlock()
+	return counter.queries
+}
+
+func (counter *queryCounter) Reset() {
+	counter.mutex.Lock()
+	counter.queries = 0
+	counter.mutex.Unlock()
+}
 
 func TestRepositoryResolveByHost(t *testing.T) {
 	t.Helper()
@@ -30,6 +68,96 @@ func TestRepositoryResolveByHost(t *testing.T) {
 	}
 	if len(runtimeCfg.Admins) != 2 {
 		t.Fatalf("expected 2 admins, got %d", len(runtimeCfg.Admins))
+	}
+}
+
+func TestRepositoryResolveByHostCachesRuntimeConfig(t *testing.T) {
+	t.Helper()
+	counter := newQueryCounter()
+	dbInstance := newTestDatabaseWithLogger(t, counter)
+	keeper := newTestSecretKeeper(t)
+	configPath := writeBootstrapFile(t, sampleBootstrapConfig())
+	if err := BootstrapFromFile(context.Background(), dbInstance, keeper, configPath); err != nil {
+		t.Fatalf("bootstrap error: %v", err)
+	}
+	repo := NewRepository(dbInstance, keeper)
+
+	counter.Reset()
+	if _, err := repo.ResolveByHost(context.Background(), "portal.alpha.example"); err != nil {
+		t.Fatalf("resolve host error: %v", err)
+	}
+	if firstQueries := counter.Count(); firstQueries == 0 {
+		t.Fatalf("expected database queries during first resolve")
+	}
+
+	counter.Reset()
+	if _, err := repo.ResolveByHost(context.Background(), "portal.alpha.example"); err != nil {
+		t.Fatalf("resolve host error: %v", err)
+	}
+	if cachedQueries := counter.Count(); cachedQueries != 0 {
+		t.Fatalf("expected cached resolve without database queries, got %d", cachedQueries)
+	}
+}
+
+func TestRepositoryResolveByIDCachesRuntimeConfig(t *testing.T) {
+	t.Helper()
+	counter := newQueryCounter()
+	dbInstance := newTestDatabaseWithLogger(t, counter)
+	keeper := newTestSecretKeeper(t)
+	configPath := writeBootstrapFile(t, sampleBootstrapConfig())
+	if err := BootstrapFromFile(context.Background(), dbInstance, keeper, configPath); err != nil {
+		t.Fatalf("bootstrap error: %v", err)
+	}
+	repo := NewRepository(dbInstance, keeper)
+
+	counter.Reset()
+	if _, err := repo.ResolveByID(context.Background(), "tenant-one"); err != nil {
+		t.Fatalf("resolve by id error: %v", err)
+	}
+	if firstQueries := counter.Count(); firstQueries == 0 {
+		t.Fatalf("expected database queries during first resolve by id")
+	}
+
+	counter.Reset()
+	if _, err := repo.ResolveByID(context.Background(), "tenant-one"); err != nil {
+		t.Fatalf("resolve by id error: %v", err)
+	}
+	if cachedQueries := counter.Count(); cachedQueries != 0 {
+		t.Fatalf("expected cached resolve by id to avoid database queries, got %d", cachedQueries)
+	}
+}
+
+func TestRepositoryRuntimeCacheIsolation(t *testing.T) {
+	t.Helper()
+	dbInstance := newTestDatabase(t)
+	keeper := newTestSecretKeeper(t)
+	configPath := writeBootstrapFile(t, sampleBootstrapConfig())
+	if err := BootstrapFromFile(context.Background(), dbInstance, keeper, configPath); err != nil {
+		t.Fatalf("bootstrap error: %v", err)
+	}
+	repo := NewRepository(dbInstance, keeper)
+
+	runtimeCfg, err := repo.ResolveByID(context.Background(), "tenant-one")
+	if err != nil {
+		t.Fatalf("resolve by id error: %v", err)
+	}
+	runtimeCfg.Admins["mutated@example.com"] = "owner"
+	if runtimeCfg.SMS != nil {
+		runtimeCfg.SMS.AuthToken = "tampered"
+	}
+
+	cachedCfg, err := repo.ResolveByID(context.Background(), "tenant-one")
+	if err != nil {
+		t.Fatalf("resolve by id error: %v", err)
+	}
+	if len(cachedCfg.Admins) != 2 {
+		t.Fatalf("expected cached admin map to remain unchanged, got %d entries", len(cachedCfg.Admins))
+	}
+	if _, exists := cachedCfg.Admins["mutated@example.com"]; exists {
+		t.Fatalf("cached admin map should not retain caller mutations")
+	}
+	if cachedCfg.SMS != nil && cachedCfg.SMS.AuthToken == "tampered" {
+		t.Fatalf("cached SMS credentials should not retain caller mutations")
 	}
 }
 

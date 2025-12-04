@@ -14,9 +14,37 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, PLANNING.md, @NOTES.md, @README.m
 
 ## BugFixes (308–399)
 
-- [x] [PG-309] There is no more google sign in button in the header. There must have been an intgeration tests to verify it. — Restored `<mpr-login-button>` on landing/dashboard headers, re-seeded header attrs from tauth config, and reintroduced 14 Playwright scenarios that exercise Google/TAuth flows plus dashboard behaviors.
-- [ ] [PG-310] Fix critical performance bottleneck in `internal/tenant/repository.go`: implement caching for tenant runtime config to avoid ~5 DB queries + decryption per request.
+- [x] [PG-310] Fix critical performance bottleneck in `internal/tenant/repository.go`: implement caching for tenant runtime config to avoid ~5 DB queries + decryption per request. Added in-memory host→tenant and runtime caches with defensive cloning plus tests; Go lint/test pass, frontend CI still blocked by Playwright issue PG-312.
 - [ ] [PG-311] Fix potential null reference/crash in `ResolveByID` if `tenantID` is empty or invalid (missing edge validation).
+- [ ] [PG-312] The tests are failing when running `make ci`. Find teh root cause and fix it.
+```
+  ✘  13 [chromium] › tests/e2e/landing.spec.ts:29:7 › Landing page auth flow › completes Google/TAuth handshake and redirects to dashboard (30.3s)
+  1) [chromium] › tests/e2e/landing.spec.ts:29:7 › Landing page auth flow › completes Google/TAuth handshake and redirects to dashboard 
+
+    TimeoutError: page.waitForURL: Timeout 30000ms exceeded.
+    =========================== logs ===========================
+    waiting for navigation to "**/dashboard.html" until "load"
+    ============================================================
+
+       at utils.ts:336
+
+      334 |   const waitForDashboard = page.url().includes('/dashboard.html')
+      335 |     ? Promise.resolve()
+    > 336 |     : page.waitForURL('**/dashboard.html', { timeout: 30000 });
+          |            ^
+      337 |
+      338 |   const triggered = await page.evaluate(() => {
+      339 |     const googleStub = (window as any).__playwrightGoogle;
+        at completeHeaderLogin (/Users/tyemirov/Development/tyemirov/pinguin/tests/e2e/utils.ts:336:12)
+        at /Users/tyemirov/Development/tyemirov/pinguin/tests/e2e/landing.spec.ts:31:5
+
+    Error Context: test-results/landing-Landing-page-auth--31c86--and-redirects-to-dashboard-chromium/error-context.md
+
+  1 failed
+    [chromium] › tests/e2e/landing.spec.ts:29:7 › Landing page auth flow › completes Google/TAuth handshake and redirects to dashboard 
+  15 passed (38.8s)
+make: *** [test-frontend] Error 1
+```
 
 ## Maintenance (400–499)
 
