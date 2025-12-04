@@ -2,6 +2,7 @@ package tenant
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -33,6 +34,9 @@ type SMSCredentials struct {
 	AuthToken  string
 	FromNumber string
 }
+
+// ErrInvalidTenantID indicates the provided tenant identifier cannot be processed.
+var ErrInvalidTenantID = errors.New("tenant: invalid tenant id")
 
 // Repository exposes tenant lookups.
 type Repository struct {
@@ -76,7 +80,11 @@ func (repo *Repository) ResolveByHost(ctx context.Context, host string) (Runtime
 
 // ResolveByID fetches tenant runtime config by id.
 func (repo *Repository) ResolveByID(ctx context.Context, tenantID string) (RuntimeConfig, error) {
-	return repo.runtimeConfig(ctx, tenantID)
+	normalized := strings.TrimSpace(tenantID)
+	if normalized == "" {
+		return RuntimeConfig{}, fmt.Errorf("%w: empty tenant id", ErrInvalidTenantID)
+	}
+	return repo.runtimeConfig(ctx, normalized)
 }
 
 // ListActiveTenants returns active tenant rows.
