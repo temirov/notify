@@ -113,7 +113,7 @@ Pinguin is configured via environment variables. Create a `.env` file or export 
 - **DISABLE_WEB_INTERFACE:**  
   Set to `true`, `1`, `yes`, or `on` (or start the server with `--disable-web-interface`) to skip booting the Gin/HTML stack entirely. When disabled, Pinguin runs the gRPC service only and skips Google Identity/TAuth/HTTP configuration checks, which is useful for backends that never expose the dashboard.
 - **TENANT_CONFIG_PATH:**  
-  Absolute path to the tenant configuration JSON file (see below). Each replica should point at the same file so they share tenant data.
+  Absolute path to the tenant configuration YAML file (see below). Each replica should point at the same file so they share tenant data; JSON input is no longer supported.
 - **MASTER_ENCRYPTION_KEY:**  
   Hex-encoded 32-byte key used to encrypt SMTP/Twilio secrets stored in the tenant config. Generate one with `openssl rand -hex 32` and keep it secret.
 - **TAuth CORS allowlist:**  
@@ -165,44 +165,39 @@ Pinguin is configured via environment variables. Create a `.env` file or export 
 
 ### Tenant configuration file
 
-Pinguin now derives tenant metadata (domains, admin accounts, SMTP/Twilio credentials, TAuth identifiers) from the JSON file pointed to by `TENANT_CONFIG_PATH`. Each entry defines one tenant and looks like this:
+Pinguin now derives tenant metadata (domains, admin accounts, SMTP/Twilio credentials, TAuth identifiers) from the YAML file pointed to by `TENANT_CONFIG_PATH`. JSON input is rejected; use YAML exclusively. Each entry defines one tenant and looks like this:
 
-```json
-{
-  "tenants": [
-    {
-      "id": "tenant-acme",
-      "slug": "acme",
-      "displayName": "Acme Corp",
-      "supportEmail": "support@acme.example",
-      "status": "active",
-      "domains": ["acme.example", "portal.acme.example"],
-      "admins": [
-        {"email": "admin@acme.example", "role": "owner"},
-        {"email": "viewer@acme.example", "role": "viewer"}
-      ],
-      "identity": {
-        "googleClientId": "google-client-id.apps.googleusercontent.com",
-        "tauthBaseUrl": "https://auth.acme.example"
-      },
-      "emailProfile": {
-        "host": "smtp.acme.example",
-        "port": 587,
-        "username": "smtp-user",
-        "password": "smtp-password",
-        "fromAddress": "noreply@acme.example"
-      },
-      "smsProfile": {
-        "accountSid": "ACxxxxxxxx",
-        "authToken": "twilio-secret",
-        "fromNumber": "+12015550123"
-      }
-    }
-  ]
-}
+```yaml
+tenants:
+  - id: tenant-acme
+    slug: acme
+    displayName: Acme Corp
+    supportEmail: support@acme.example
+    status: active
+    domains:
+      - acme.example
+      - portal.acme.example
+    admins:
+      - email: admin@acme.example
+        role: owner
+      - email: viewer@acme.example
+        role: viewer
+    identity:
+      googleClientId: google-client-id.apps.googleusercontent.com
+      tauthBaseUrl: https://auth.acme.example
+    emailProfile:
+      host: smtp.acme.example
+      port: 587
+      username: smtp-user
+      password: smtp-password
+      fromAddress: noreply@acme.example
+    smsProfile:
+      accountSid: ACxxxxxxxx
+      authToken: twilio-secret
+      fromNumber: "+12015550123"
 ```
 
-The `MASTER_ENCRYPTION_KEY` is used to encrypt the SMTP/Twilio secrets before they are stored in SQLite. Regenerate the file (or run `tenant.BootstrapFromFile`) whenever you need to add tenants, rotate credentials, or change admin memberships. See [`docs/multitenancy-plan.md`](docs/multitenancy-plan.md) for the end-to-end roadmap.
+See `configs/tenant.yml` for a ready-to-use sample. The `MASTER_ENCRYPTION_KEY` is used to encrypt the SMTP/Twilio secrets before they are stored in SQLite. Regenerate the file (or run `tenant.BootstrapFromFile`) whenever you need to add tenants, rotate credentials, or change admin memberships. See [`docs/multitenancy-plan.md`](docs/multitenancy-plan.md) for the end-to-end roadmap.
 
 Example `.env` file:
 

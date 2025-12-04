@@ -15,6 +15,7 @@ import (
 	"github.com/temirov/pinguin/internal/service"
 	"github.com/temirov/pinguin/internal/tenant"
 	sessionvalidator "github.com/tyemirov/tauth/pkg/sessionvalidator"
+	"gopkg.in/yaml.v3"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"log/slog"
@@ -244,11 +245,11 @@ func setupTenantConfig(t *testing.T) string {
 			},
 		},
 	}
-	bytes, err := json.Marshal(config)
+	bytes, err := yaml.Marshal(config)
 	if err != nil {
-		t.Fatalf("json.Marshal failed: %v", err)
+		t.Fatalf("yaml.Marshal failed: %v", err)
 	}
-	path := filepath.Join(t.TempDir(), "tenants.json")
+	path := filepath.Join(t.TempDir(), "tenants.yml")
 	err = os.WriteFile(path, bytes, 0644)
 	if err != nil {
 		t.Fatalf("os.WriteFile failed: %v", err)

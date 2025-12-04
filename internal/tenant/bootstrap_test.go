@@ -52,3 +52,23 @@ func TestBootstrapFromFileRejectsEmptyList(t *testing.T) {
 		t.Fatalf("expected validation error")
 	}
 }
+
+func TestBootstrapFromYamlFile(t *testing.T) {
+	t.Helper()
+	dbInstance := newTestDatabase(t)
+	keeper := newTestSecretKeeper(t)
+	cfg := sampleBootstrapConfig()
+	path := writeBootstrapFile(t, cfg)
+
+	if err := BootstrapFromFile(context.Background(), dbInstance, keeper, path); err != nil {
+		t.Fatalf("bootstrap yaml error: %v", err)
+	}
+
+	var tenantCount int64
+	if err := dbInstance.Model(&Tenant{}).Count(&tenantCount).Error; err != nil {
+		t.Fatalf("count tenants: %v", err)
+	}
+	if tenantCount != 1 {
+		t.Fatalf("expected 1 tenant, got %d", tenantCount)
+	}
+}

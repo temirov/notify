@@ -1,11 +1,11 @@
 package tenant
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"gopkg.in/yaml.v3"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -41,13 +41,13 @@ func newTestDatabaseWithLogger(t *testing.T, customLogger logger.Interface) *gor
 
 func writeBootstrapFile(t *testing.T, cfg BootstrapConfig) string {
 	t.Helper()
-	payload, err := json.Marshal(cfg)
+	payload, err := yaml.Marshal(cfg)
 	if err != nil {
-		t.Fatalf("marshal bootstrap config: %v", err)
+		t.Fatalf("marshal bootstrap yaml: %v", err)
 	}
-	path := filepath.Join(t.TempDir(), "tenants.json")
+	path := filepath.Join(t.TempDir(), "tenants.yml")
 	if err := os.WriteFile(path, payload, 0o600); err != nil {
-		t.Fatalf("write bootstrap file: %v", err)
+		t.Fatalf("write bootstrap yaml file: %v", err)
 	}
 	return path
 }

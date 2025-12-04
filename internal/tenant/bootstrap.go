@@ -2,17 +2,17 @@ package tenant
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/google/uuid"
+	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-// BootstrapConfig defines the JSON layout for tenant provisioning.
+// BootstrapConfig defines the YAML layout for tenant provisioning.
 type BootstrapConfig struct {
 	Tenants []BootstrapTenant `json:"tenants"`
 }
@@ -59,15 +59,15 @@ type BootstrapSMSProfile struct {
 	FromNumber string `json:"fromNumber"`
 }
 
-// BootstrapFromFile loads tenants from a JSON file and upserts them.
+// BootstrapFromFile loads tenants from a YAML file and upserts them.
 func BootstrapFromFile(ctx context.Context, db *gorm.DB, keeper *SecretKeeper, path string) error {
 	contents, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("tenant bootstrap: read file: %w", err)
 	}
 	var cfg BootstrapConfig
-	if err := json.Unmarshal(contents, &cfg); err != nil {
-		return fmt.Errorf("tenant bootstrap: parse json: %w", err)
+	if err := yaml.Unmarshal(contents, &cfg); err != nil {
+		return fmt.Errorf("tenant bootstrap: parse yaml: %w", err)
 	}
 	if len(cfg.Tenants) == 0 {
 		return fmt.Errorf("tenant bootstrap: no tenants in %s", path)

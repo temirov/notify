@@ -11,6 +11,7 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, PLANNING.md, @NOTES.md, @README.m
 - [ ] [PG-202] Refactor gRPC server to use an interceptor for tenant resolution instead of manual calls in every handler.
 - [ ] [PG-203] Optimize retry worker to avoid N+1 queries per tick (iterating all tenants).
 - [ ] [PG-204] Move validation logic from Service layer to Domain constructors/Edge handlers (POLICY.md).
+- [x] [PG-205] Support YAML tenant config (TENANT_CONFIG_PATH) and ship a YAML sample for docker/dev; JSON input no longer accepted.
 
 ## BugFixes (308–399)
 
