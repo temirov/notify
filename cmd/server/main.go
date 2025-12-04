@@ -262,6 +262,7 @@ func mapModelToGrpcResponse(modelResp model.NotificationResponse) *grpcapi.Notif
 		UpdatedAt:         modelResp.UpdatedAt.Format(time.RFC3339),
 		ScheduledTime:     scheduledTime,
 		Attachments:       mapModelAttachments(modelResp.Attachments),
+		TenantId:          modelResp.TenantID,
 	}
 }
 
