@@ -1,7 +1,6 @@
 package tenant
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -41,19 +40,6 @@ func newTestDatabaseWithLogger(t *testing.T, customLogger logger.Interface) *gor
 }
 
 func writeBootstrapFile(t *testing.T, cfg BootstrapConfig) string {
-	t.Helper()
-	payload, err := json.Marshal(cfg)
-	if err != nil {
-		t.Fatalf("marshal bootstrap config: %v", err)
-	}
-	path := filepath.Join(t.TempDir(), "tenants.json")
-	if err := os.WriteFile(path, payload, 0o600); err != nil {
-		t.Fatalf("write bootstrap file: %v", err)
-	}
-	return path
-}
-
-func writeBootstrapYAML(t *testing.T, cfg BootstrapConfig) string {
 	t.Helper()
 	payload, err := yaml.Marshal(cfg)
 	if err != nil {

@@ -58,7 +58,7 @@ func TestBootstrapFromYamlFile(t *testing.T) {
 	dbInstance := newTestDatabase(t)
 	keeper := newTestSecretKeeper(t)
 	cfg := sampleBootstrapConfig()
-	path := writeBootstrapYAML(t, cfg)
+	path := writeBootstrapFile(t, cfg)
 
 	if err := BootstrapFromFile(context.Background(), dbInstance, keeper, path); err != nil {
 		t.Fatalf("bootstrap yaml error: %v", err)
