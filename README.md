@@ -97,16 +97,29 @@ tenants:
   tenants:
     - id: tenant-local
       slug: local
+      displayName: Local Sandbox
+      domains: [${TENANT_LOCAL_DOMAIN_PRIMARY}, ${TENANT_LOCAL_DOMAIN_SECONDARY}]
+      admins:
+        - email: ${TENANT_LOCAL_ADMIN_EMAIL}
+          role: owner
+      identity:
+        googleClientId: ${TENANT_LOCAL_GOOGLE_CLIENT_ID}
+        tauthBaseUrl: ${TENANT_LOCAL_TAUTH_BASE_URL}
       emailProfile:
-        host: smtp.localhost
-        port: 1025
-        username: ${SMTP_USERNAME}
-        password: ${SMTP_PASSWORD}
-        fromAddress: noreply@localhost
+        host: ${TENANT_LOCAL_SMTP_HOST}
+        port: ${TENANT_LOCAL_SMTP_PORT}
+        username: ${TENANT_LOCAL_SMTP_USERNAME}
+        password: ${TENANT_LOCAL_SMTP_PASSWORD}
+        fromAddress: ${TENANT_LOCAL_FROM_EMAIL}
+      smsProfile:
+        accountSid: ${TWILIO_ACCOUNT_SID}
+        authToken: ${TWILIO_AUTH_TOKEN}
+        fromNumber: ${TWILIO_FROM_NUMBER}
 ```
 
 Export the referenced environment variables before starting the server. The default config references or sets the following keys:
 
+- See `configs/.env.example` for a full list of variables to seed your environment when using the default config template.
 - **PINGUIN_CONFIG_PATH:**  
   Optional override for the service configuration file (defaults to `configs/config.yml`).
 
