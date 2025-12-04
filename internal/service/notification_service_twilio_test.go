@@ -46,10 +46,7 @@ func TestNewNotificationServiceLogsWhenSmsDisabled(t *testing.T) {
 		t.Fatalf("expected concrete implementation")
 	}
 
-	if impl.smsSender != nil {
+	if impl.defaultSmsSender != nil {
 		t.Fatalf("expected sms sender to be nil when disabled")
-	}
-	if impl.smsEnabled {
-		t.Fatalf("expected sms to be disabled")
 	}
 }

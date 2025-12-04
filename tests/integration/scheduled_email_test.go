@@ -151,5 +151,12 @@ func integrationTenantContext() context.Context {
 		Tenant: tenant.Tenant{
 			ID: "integration-tenant",
 		},
+		Email: tenant.EmailCredentials{
+			Host:        "smtp.integration",
+			Port:        25,
+			Username:    "integration",
+			Password:    "secret",
+			FromAddress: "noreply@integration",
+		},
 	})
 }
