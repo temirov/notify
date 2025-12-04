@@ -9,6 +9,7 @@ export default defineConfig({
     timeout: 5 * 1000,
   },
   fullyParallel: false,
+  globalSetup: './tests/e2e/global-setup.js',
   reporter: [['list']],
   workers: 1,
   use: {
