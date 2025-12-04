@@ -16,22 +16,22 @@ tenants:
       supportEmail: support@localhost
       status: active
       domains:
-        - localhost
-        - 127.0.0.1
+        - ${TENANT_LOCAL_DOMAIN_PRIMARY}
+        - ${TENANT_LOCAL_DOMAIN_SECONDARY}
       admins:
-        - email: admin@localhost
+        - email: ${TENANT_LOCAL_ADMIN_EMAIL}
           role: owner
-        - email: viewer@localhost
+        - email: ${TENANT_LOCAL_VIEWER_EMAIL}
           role: viewer
       identity:
-        googleClientId: local-google-client-id.apps.googleusercontent.com
-        tauthBaseUrl: http://localhost:8081
+        googleClientId: ${TENANT_LOCAL_GOOGLE_CLIENT_ID}
+        tauthBaseUrl: ${TENANT_LOCAL_TAUTH_BASE_URL}
       emailProfile:
-        host: smtp.localhost
-        port: 1025
-        username: smtp-user
-        password: smtp-pass
-        fromAddress: noreply@localhost
+        host: ${TENANT_LOCAL_SMTP_HOST}
+        port: ${TENANT_LOCAL_SMTP_PORT}
+        username: ${TENANT_LOCAL_SMTP_USERNAME}
+        password: ${TENANT_LOCAL_SMTP_PASSWORD}
+        fromAddress: ${TENANT_LOCAL_FROM_EMAIL}
       smsProfile:
         accountSid: ${TWILIO_ACCOUNT_SID}
         authToken: ${TWILIO_AUTH_TOKEN}
