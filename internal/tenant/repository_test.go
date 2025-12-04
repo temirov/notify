@@ -182,6 +182,49 @@ func TestRepositoryRuntimeCacheIsolation(t *testing.T) {
 	}
 }
 
+func TestRepositoryCachesInvalidateAfterBootstrap(t *testing.T) {
+	t.Helper()
+	dbInstance := newTestDatabase(t)
+	keeper := newTestSecretKeeper(t)
+	cfg := sampleBootstrapConfig()
+	path := writeBootstrapFile(t, cfg)
+	if err := BootstrapFromFile(context.Background(), dbInstance, keeper, path); err != nil {
+		t.Fatalf("bootstrap error: %v", err)
+	}
+	repo := NewRepository(dbInstance, keeper)
+	if _, err := repo.ResolveByHost(context.Background(), "portal.alpha.example"); err != nil {
+		t.Fatalf("resolve host error: %v", err)
+	}
+
+	cfg.Tenants[0].Admins = []BootstrapMember{
+		{Email: "rotated@alpha.example", Role: "owner"},
+	}
+	cfg.Tenants[0].EmailProfile.Password = "new-smtp-password"
+	cfg.Tenants[0].SMSProfile = &BootstrapSMSProfile{
+		AccountSID: "AC999",
+		AuthToken:  "sms-rotated",
+		FromNumber: "+19999999999",
+	}
+	updatedPath := writeBootstrapFile(t, cfg)
+	if err := BootstrapFromFile(context.Background(), dbInstance, keeper, updatedPath); err != nil {
+		t.Fatalf("bootstrap error: %v", err)
+	}
+
+	refreshedCfg, err := repo.ResolveByHost(context.Background(), "portal.alpha.example")
+	if err != nil {
+		t.Fatalf("resolve after bootstrap error: %v", err)
+	}
+	if len(refreshedCfg.Admins) != 1 {
+		t.Fatalf("expected refreshed admin list, got %d entries", len(refreshedCfg.Admins))
+	}
+	if refreshedCfg.Email.Password != "new-smtp-password" {
+		t.Fatalf("expected refreshed SMTP password")
+	}
+	if refreshedCfg.SMS == nil || refreshedCfg.SMS.AuthToken != "sms-rotated" {
+		t.Fatalf("expected refreshed SMS credentials")
+	}
+}
+
 func TestRepositoryListActiveTenants(t *testing.T) {
 	t.Helper()
 	dbInstance := newTestDatabase(t)

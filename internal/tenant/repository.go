@@ -47,14 +47,25 @@ type Repository struct {
 	domainTenantCache map[string]string
 }
 
+var repositoryRegistry = struct {
+	sync.Mutex
+	repos map[*Repository]struct{}
+}{
+	repos: make(map[*Repository]struct{}),
+}
+
 // NewRepository constructs a repository.
 func NewRepository(db *gorm.DB, keeper *SecretKeeper) *Repository {
-	return &Repository{
+	repo := &Repository{
 		db:                db,
 		keeper:            keeper,
 		runtimeCache:      make(map[string]RuntimeConfig),
 		domainTenantCache: make(map[string]string),
 	}
+	repositoryRegistry.Lock()
+	repositoryRegistry.repos[repo] = struct{}{}
+	repositoryRegistry.Unlock()
+	return repo
 }
 
 // ResolveByHost returns the tenant associated with the provided host.
@@ -195,6 +206,13 @@ func (repo *Repository) cacheRuntimeConfig(tenantID string, cfg RuntimeConfig) {
 	repo.cacheMutex.Unlock()
 }
 
+func (repo *Repository) clearCaches() {
+	repo.cacheMutex.Lock()
+	repo.runtimeCache = make(map[string]RuntimeConfig)
+	repo.domainTenantCache = make(map[string]string)
+	repo.cacheMutex.Unlock()
+}
+
 func (repo *Repository) cachedTenantID(host string) (string, bool) {
 	repo.cacheMutex.RLock()
 	tenantID, ok := repo.domainTenantCache[host]
@@ -223,6 +241,14 @@ func cloneRuntimeConfig(cfg RuntimeConfig) RuntimeConfig {
 		clonedCfg.SMS = &smsCopy
 	}
 	return clonedCfg
+}
+
+func invalidateRegisteredRepositories() {
+	repositoryRegistry.Lock()
+	defer repositoryRegistry.Unlock()
+	for repo := range repositoryRegistry.repos {
+		repo.clearCaches()
+	}
 }
 
 func normalizeHost(host string) string {
