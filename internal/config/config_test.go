@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/temirov/pinguin/internal/tenant"
 )
 
 func TestLoadConfigFromYAMLWithEnvExpansion(t *testing.T) {
@@ -22,7 +24,25 @@ server:
   connectionTimeoutSec: 3
   operationTimeoutSec: 7
 tenants:
-  configPath: ${TENANT_CONFIG_PATH}
+  tenants:
+    - id: tenant-one
+      slug: one
+      displayName: One Corp
+      supportEmail: support@one.test
+      status: active
+      domains: [one.test]
+      admins:
+        - email: admin@one.test
+          role: owner
+      identity:
+        googleClientId: google-one
+        tauthBaseUrl: https://auth.one.test
+      emailProfile:
+        host: smtp.one.test
+        port: 587
+        username: smtp-user
+        password: smtp-pass
+        fromAddress: noreply@one.test
 web:
   enabled: true
   listenAddr: :8080
@@ -50,7 +70,6 @@ twilio:
 	t.Setenv("DATABASE_PATH", "test.db")
 	t.Setenv("GRPC_AUTH_TOKEN", "unit-token")
 	t.Setenv("MASTER_ENCRYPTION_KEY", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-	t.Setenv("TENANT_CONFIG_PATH", "/etc/pinguin/tenants.yml")
 	t.Setenv("TAUTH_SIGNING_KEY", "signing-key")
 	t.Setenv("SMTP_USERNAME", "apikey")
 	t.Setenv("SMTP_PASSWORD", "secret")
@@ -64,13 +83,38 @@ twilio:
 	}
 
 	expected := Config{
-		DatabasePath:         "test.db",
-		GRPCAuthToken:        "unit-token",
-		LogLevel:             "INFO",
-		MaxRetries:           5,
-		RetryIntervalSec:     4,
-		MasterEncryptionKey:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		TenantConfigPath:     "/etc/pinguin/tenants.yml",
+		DatabasePath:        "test.db",
+		GRPCAuthToken:       "unit-token",
+		LogLevel:            "INFO",
+		MaxRetries:          5,
+		RetryIntervalSec:    4,
+		MasterEncryptionKey: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		TenantBootstrap: tenant.BootstrapConfig{
+			Tenants: []tenant.BootstrapTenant{
+				{
+					ID:           "tenant-one",
+					Slug:         "one",
+					DisplayName:  "One Corp",
+					SupportEmail: "support@one.test",
+					Status:       "active",
+					Domains:      []string{"one.test"},
+					Admins: []tenant.BootstrapMember{
+						{Email: "admin@one.test", Role: "owner"},
+					},
+					Identity: tenant.BootstrapIdentity{
+						GoogleClientID: "google-one",
+						TAuthBaseURL:   "https://auth.one.test",
+					},
+					EmailProfile: tenant.BootstrapEmailProfile{
+						Host:        "smtp.one.test",
+						Port:        587,
+						Username:    "smtp-user",
+						Password:    "smtp-pass",
+						FromAddress: "noreply@one.test",
+					},
+				},
+			},
+		},
 		WebInterfaceEnabled:  true,
 		HTTPListenAddr:       ":8080",
 		HTTPStaticRoot:       "web",
@@ -111,7 +155,25 @@ server:
   connectionTimeoutSec: 5
   operationTimeoutSec: 10
 tenants:
-  configPath: configs/tenant.yml
+  tenants:
+    - id: tenant-one
+      slug: one
+      displayName: One Corp
+      supportEmail: support@one.test
+      status: active
+      domains: [one.test]
+      admins:
+        - email: admin@one.test
+          role: owner
+      identity:
+        googleClientId: google-one
+        tauthBaseUrl: https://auth.one.test
+      emailProfile:
+        host: smtp.one.test
+        port: 587
+        username: smtp-user
+        password: smtp-pass
+        fromAddress: noreply@one.test
 web:
   enabled: true
   listenAddr: :0
@@ -160,7 +222,25 @@ server:
   connectionTimeoutSec: 5
   operationTimeoutSec: 10
 tenants:
-  configPath: configs/tenant.yml
+  tenants:
+    - id: tenant-one
+      slug: one
+      displayName: One Corp
+      supportEmail: support@one.test
+      status: active
+      domains: [one.test]
+      admins:
+        - email: admin@one.test
+          role: owner
+      identity:
+        googleClientId: google-one
+        tauthBaseUrl: https://auth.one.test
+      emailProfile:
+        host: smtp.one.test
+        port: 587
+        username: smtp-user
+        password: smtp-pass
+        fromAddress: noreply@one.test
 web:
   enabled: false
 smtp:
@@ -194,7 +274,25 @@ server:
   connectionTimeoutSec: 5
   operationTimeoutSec: 10
 tenants:
-  configPath: configs/tenant.yml
+  tenants:
+    - id: tenant-one
+      slug: one
+      displayName: One Corp
+      supportEmail: support@one.test
+      status: active
+      domains: [one.test]
+      admins:
+        - email: admin@one.test
+          role: owner
+      identity:
+        googleClientId: google-one
+        tauthBaseUrl: https://auth.one.test
+      emailProfile:
+        host: smtp.one.test
+        port: 587
+        username: smtp-user
+        password: smtp-pass
+        fromAddress: noreply@one.test
 web:
   enabled: false
 smtp:

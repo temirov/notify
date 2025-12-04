@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/temirov/pinguin/internal/tenant"
 	"gopkg.in/yaml.v3"
 )
 
@@ -20,6 +21,7 @@ type Config struct {
 
 	MasterEncryptionKey string
 	TenantConfigPath    string
+	TenantBootstrap     tenant.BootstrapConfig
 
 	WebInterfaceEnabled bool
 	HTTPListenAddr      string
@@ -79,7 +81,8 @@ type tauthSection struct {
 }
 
 type tenantSection struct {
-	ConfigPath string `yaml:"configPath"`
+	ConfigPath string                   `yaml:"configPath"`
+	Tenants    []tenant.BootstrapTenant `yaml:"tenants"`
 }
 
 type smtpSection struct {
@@ -147,6 +150,9 @@ func LoadConfig(disableWebInterface bool) (Config, error) {
 		TwilioFromNumber:     strings.TrimSpace(fileCfg.Twilio.FromNumber),
 		ConnectionTimeoutSec: fileCfg.Server.ConnectionTimeout,
 		OperationTimeoutSec:  fileCfg.Server.OperationTimeout,
+		TenantBootstrap: tenant.BootstrapConfig{
+			Tenants: fileCfg.Tenants.Tenants,
+		},
 	}
 
 	if configuration.WebInterfaceEnabled {
@@ -208,7 +214,9 @@ func validateConfig(cfg Config) error {
 	requirePositive(cfg.MaxRetries, "server.maxRetries", &errors)
 	requirePositive(cfg.RetryIntervalSec, "server.retryIntervalSec", &errors)
 	requireString(cfg.MasterEncryptionKey, "server.masterEncryptionKey", &errors)
-	requireString(cfg.TenantConfigPath, "tenants.configPath", &errors)
+	if len(cfg.TenantBootstrap.Tenants) == 0 {
+		requireString(cfg.TenantConfigPath, "tenants.configPath", &errors)
+	}
 	requirePositive(cfg.ConnectionTimeoutSec, "server.connectionTimeoutSec", &errors)
 	requirePositive(cfg.OperationTimeoutSec, "server.operationTimeoutSec", &errors)
 

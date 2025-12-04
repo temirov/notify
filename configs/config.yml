@@ -9,7 +9,33 @@ server:
   operationTimeoutSec: 30
 
 tenants:
-  configPath: configs/tenant.yml
+  tenants:
+    - id: tenant-local
+      slug: local
+      displayName: Local Sandbox
+      supportEmail: support@localhost
+      status: active
+      domains:
+        - localhost
+        - 127.0.0.1
+      admins:
+        - email: admin@localhost
+          role: owner
+        - email: viewer@localhost
+          role: viewer
+      identity:
+        googleClientId: local-google-client-id.apps.googleusercontent.com
+        tauthBaseUrl: http://localhost:8081
+      emailProfile:
+        host: smtp.localhost
+        port: 1025
+        username: smtp-user
+        password: smtp-pass
+        fromAddress: noreply@localhost
+      smsProfile:
+        accountSid: ${TWILIO_ACCOUNT_SID}
+        authToken: ${TWILIO_AUTH_TOKEN}
+        fromNumber: ${TWILIO_FROM_NUMBER}
 
 web:
   enabled: true
