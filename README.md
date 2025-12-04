@@ -87,7 +87,20 @@ go build -o pinguin ./cmd/server
 
 ## Configuration
 
-Pinguin is configured via environment variables. Create a `.env` file or export the variables manually. Below is an explanation of each variable:
+Pinguin loads settings from `configs/config.yml` (override with `PINGUIN_CONFIG_PATH`). The YAML supports `${VAR}` expansion so you can keep secrets in your shell or `.env` file instead of the repository. A minimal example:
+
+```yaml
+server:
+  databasePath: ${DATABASE_PATH}
+  masterEncryptionKey: ${MASTER_ENCRYPTION_KEY}
+tenants:
+  configPath: configs/tenant.yml
+```
+
+Export the referenced environment variables before starting the server. The default config references or sets the following keys:
+
+- **PINGUIN_CONFIG_PATH:**  
+  Optional override for the service configuration file (defaults to `configs/config.yml`).
 
 - **DATABASE_PATH:**  
   Path to the SQLite database file (e.g., `app.db`).

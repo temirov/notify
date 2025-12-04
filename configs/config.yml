@@ -1,0 +1,35 @@
+server:
+  databasePath: ${DATABASE_PATH}
+  grpcAuthToken: ${GRPC_AUTH_TOKEN}
+  logLevel: INFO
+  maxRetries: 3
+  retryIntervalSec: 30
+  masterEncryptionKey: ${MASTER_ENCRYPTION_KEY}
+  connectionTimeoutSec: 5
+  operationTimeoutSec: 30
+
+tenants:
+  configPath: configs/tenant.yml
+
+web:
+  enabled: true
+  listenAddr: :8080
+  staticRoot: /web
+  allowedOrigins:
+    - http://localhost:4173
+  tauth:
+    signingKey: ${TAUTH_SIGNING_KEY}
+    issuer: tauth
+    cookieName: app_session
+
+smtp:
+  username: ${SMTP_USERNAME}
+  password: ${SMTP_PASSWORD}
+  host: smtp.localhost
+  port: 1025
+  fromEmail: noreply@localhost
+
+twilio:
+  accountSid: ${TWILIO_ACCOUNT_SID}
+  authToken: ${TWILIO_AUTH_TOKEN}
+  fromNumber: ${TWILIO_FROM_NUMBER}
