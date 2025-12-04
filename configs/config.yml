@@ -47,10 +47,3 @@ web:
     signingKey: ${TAUTH_SIGNING_KEY}
     issuer: tauth
     cookieName: app_session
-
-smtp:
-  username: ${SMTP_USERNAME}
-  password: ${SMTP_PASSWORD}
-  host: smtp.localhost
-  port: 1025
-  fromEmail: noreply@localhost
