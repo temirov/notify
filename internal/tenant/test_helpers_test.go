@@ -8,11 +8,21 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 func newTestDatabase(t *testing.T) *gorm.DB {
 	t.Helper()
-	dbInstance, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	return newTestDatabaseWithLogger(t, nil)
+}
+
+func newTestDatabaseWithLogger(t *testing.T, customLogger logger.Interface) *gorm.DB {
+	t.Helper()
+	config := &gorm.Config{}
+	if customLogger != nil {
+		config.Logger = customLogger
+	}
+	dbInstance, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), config)
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}

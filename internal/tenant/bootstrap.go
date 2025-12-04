@@ -77,6 +77,7 @@ func BootstrapFromFile(ctx context.Context, db *gorm.DB, keeper *SecretKeeper, p
 			return err
 		}
 	}
+	invalidateRegisteredRepositories()
 	return nil
 }
 
