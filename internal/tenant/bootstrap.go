@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -66,8 +67,8 @@ func BootstrapFromFile(ctx context.Context, db *gorm.DB, keeper *SecretKeeper, p
 		return fmt.Errorf("tenant bootstrap: read file: %w", err)
 	}
 	var cfg BootstrapConfig
-	if err := json.Unmarshal(contents, &cfg); err != nil {
-		return fmt.Errorf("tenant bootstrap: parse json: %w", err)
+	if err := parseBootstrapConfig(contents, &cfg); err != nil {
+		return err
 	}
 	if len(cfg.Tenants) == 0 {
 		return fmt.Errorf("tenant bootstrap: no tenants in %s", path)
@@ -200,6 +201,16 @@ func upsertTenant(ctx context.Context, db *gorm.DB, keeper *SecretKeeper, spec B
 
 		return nil
 	})
+}
+
+func parseBootstrapConfig(contents []byte, destination *BootstrapConfig) error {
+	if jsonErr := json.Unmarshal(contents, destination); jsonErr == nil {
+		return nil
+	}
+	if yamlErr := yaml.Unmarshal(contents, destination); yamlErr == nil {
+		return nil
+	}
+	return fmt.Errorf("tenant bootstrap: parse config: unsupported format")
 }
 
 func clauseOnConflictUpdateAll() clause.Expression {

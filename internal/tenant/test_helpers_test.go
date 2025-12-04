@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"gopkg.in/yaml.v3"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -48,6 +49,19 @@ func writeBootstrapFile(t *testing.T, cfg BootstrapConfig) string {
 	path := filepath.Join(t.TempDir(), "tenants.json")
 	if err := os.WriteFile(path, payload, 0o600); err != nil {
 		t.Fatalf("write bootstrap file: %v", err)
+	}
+	return path
+}
+
+func writeBootstrapYAML(t *testing.T, cfg BootstrapConfig) string {
+	t.Helper()
+	payload, err := yaml.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal bootstrap yaml: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "tenants.yml")
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatalf("write bootstrap yaml file: %v", err)
 	}
 	return path
 }
