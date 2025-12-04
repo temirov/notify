@@ -20,6 +20,8 @@ func TestLoadConfig(t *testing.T) {
 		{key: "LOG_LEVEL", value: "INFO"},
 		{key: "MAX_RETRIES", value: "5"},
 		{key: "RETRY_INTERVAL_SEC", value: "4"},
+		{key: "MASTER_ENCRYPTION_KEY", value: strings.Repeat("a", 64)},
+		{key: "TENANT_CONFIG_PATH", value: "/etc/pinguin/tenants.json"},
 		{key: "HTTP_LISTEN_ADDR", value: ":8080"},
 		{key: "HTTP_STATIC_ROOT", value: "web"},
 		{key: "HTTP_ALLOWED_ORIGINS", value: "https://app.local,https://alt.local"},
@@ -36,7 +38,6 @@ func TestLoadConfig(t *testing.T) {
 		{key: "TWILIO_FROM_NUMBER", value: "+10000000000"},
 		{key: "CONNECTION_TIMEOUT_SEC", value: "3"},
 		{key: "OPERATION_TIMEOUT_SEC", value: "7"},
-		{key: "ADMINS", value: "admin1@example.com,admin2@example.com"},
 	}
 
 	testCases := []struct {
@@ -59,11 +60,12 @@ func TestLoadConfig(t *testing.T) {
 				LogLevel:             "INFO",
 				MaxRetries:           5,
 				RetryIntervalSec:     4,
+				MasterEncryptionKey:  strings.Repeat("a", 64),
+				TenantConfigPath:     "/etc/pinguin/tenants.json",
 				WebInterfaceEnabled:  true,
 				HTTPListenAddr:       ":8080",
 				HTTPStaticRoot:       "web",
 				HTTPAllowedOrigins:   []string{"https://app.local", "https://alt.local"},
-				AdminEmails:          []string{"admin1@example.com", "admin2@example.com"},
 				TAuthSigningKey:      "signing-key",
 				TAuthIssuer:          "tauth",
 				TAuthCookieName:      "custom_session",
@@ -103,11 +105,12 @@ func TestLoadConfig(t *testing.T) {
 				LogLevel:             "INFO",
 				MaxRetries:           5,
 				RetryIntervalSec:     4,
+				MasterEncryptionKey:  strings.Repeat("a", 64),
+				TenantConfigPath:     "/etc/pinguin/tenants.json",
 				WebInterfaceEnabled:  true,
 				HTTPListenAddr:       ":8080",
 				HTTPStaticRoot:       defaultHTTPStaticRoot,
 				HTTPAllowedOrigins:   []string{"https://app.local", "https://alt.local"},
-				AdminEmails:          []string{"admin1@example.com", "admin2@example.com"},
 				TAuthSigningKey:      "signing-key",
 				TAuthIssuer:          "tauth",
 				TAuthCookieName:      "custom_session",
@@ -172,6 +175,8 @@ func TestLoadConfig(t *testing.T) {
 				LogLevel:             "INFO",
 				MaxRetries:           5,
 				RetryIntervalSec:     4,
+				MasterEncryptionKey:  strings.Repeat("a", 64),
+				TenantConfigPath:     "/etc/pinguin/tenants.json",
 				WebInterfaceEnabled:  true,
 				HTTPListenAddr:       ":8080",
 				HTTPStaticRoot:       "web",
@@ -186,7 +191,6 @@ func TestLoadConfig(t *testing.T) {
 				FromEmail:            "noreply@test",
 				ConnectionTimeoutSec: 3,
 				OperationTimeoutSec:  7,
-				AdminEmails:          []string{"admin1@example.com", "admin2@example.com"},
 			},
 			assert: func(t *testing.T, cfg Config) {
 				t.Helper()
@@ -196,11 +200,11 @@ func TestLoadConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "MissingAdmins",
+			name: "MissingTenantConfigPath",
 			mutateEnv: func(t *testing.T) {
 				var trimmed []envEntry
 				for _, entry := range completeEnvironment {
-					if entry.key == "ADMINS" {
+					if entry.key == "TENANT_CONFIG_PATH" {
 						continue
 					}
 					trimmed = append(trimmed, entry)
@@ -208,7 +212,7 @@ func TestLoadConfig(t *testing.T) {
 				setEnvironment(t, trimmed)
 			},
 			expectError:    true,
-			errorSubstring: "missing admin emails",
+			errorSubstring: "missing environment variable TENANT_CONFIG_PATH",
 		},
 		{
 			name: "DisableWebViaFlagSkipsHTTPRequirements",
@@ -231,6 +235,8 @@ func TestLoadConfig(t *testing.T) {
 				LogLevel:             "INFO",
 				MaxRetries:           5,
 				RetryIntervalSec:     4,
+				MasterEncryptionKey:  strings.Repeat("a", 64),
+				TenantConfigPath:     "/etc/pinguin/tenants.json",
 				WebInterfaceEnabled:  false,
 				SMTPUsername:         "apikey",
 				SMTPPassword:         "secret",
@@ -250,7 +256,7 @@ func TestLoadConfig(t *testing.T) {
 				var trimmed []envEntry
 				for _, entry := range completeEnvironment {
 					switch entry.key {
-					case "HTTP_LISTEN_ADDR", "HTTP_STATIC_ROOT", "HTTP_ALLOWED_ORIGINS", "ADMINS", "TAUTH_SIGNING_KEY", "TAUTH_ISSUER", "TAUTH_COOKIE_NAME":
+					case "HTTP_LISTEN_ADDR", "HTTP_STATIC_ROOT", "HTTP_ALLOWED_ORIGINS", "TAUTH_SIGNING_KEY", "TAUTH_ISSUER", "TAUTH_COOKIE_NAME":
 						continue
 					default:
 						trimmed = append(trimmed, entry)
@@ -265,6 +271,8 @@ func TestLoadConfig(t *testing.T) {
 				LogLevel:             "INFO",
 				MaxRetries:           5,
 				RetryIntervalSec:     4,
+				MasterEncryptionKey:  strings.Repeat("a", 64),
+				TenantConfigPath:     "/etc/pinguin/tenants.json",
 				WebInterfaceEnabled:  false,
 				SMTPUsername:         "apikey",
 				SMTPPassword:         "secret",
@@ -324,6 +332,8 @@ func assertConfigEquals(t *testing.T, actual Config, expected Config) {
 		actual.LogLevel != expected.LogLevel ||
 		actual.MaxRetries != expected.MaxRetries ||
 		actual.RetryIntervalSec != expected.RetryIntervalSec ||
+		actual.MasterEncryptionKey != expected.MasterEncryptionKey ||
+		actual.TenantConfigPath != expected.TenantConfigPath ||
 		actual.WebInterfaceEnabled != expected.WebInterfaceEnabled ||
 		actual.HTTPListenAddr != expected.HTTPListenAddr ||
 		actual.HTTPStaticRoot != expected.HTTPStaticRoot ||
@@ -341,8 +351,5 @@ func assertConfigEquals(t *testing.T, actual Config, expected Config) {
 	}
 	if !reflect.DeepEqual(actual.HTTPAllowedOrigins, expected.HTTPAllowedOrigins) {
 		t.Fatalf("unexpected allowed origins: %+v", actual.HTTPAllowedOrigins)
-	}
-	if !reflect.DeepEqual(actual.AdminEmails, expected.AdminEmails) {
-		t.Fatalf("unexpected admin emails: %+v", actual.AdminEmails)
 	}
 }
