@@ -15,7 +15,7 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, PLANNING.md, @NOTES.md, @README.m
 ## BugFixes (308–399)
 
 - [x] [PG-310] Fix critical performance bottleneck in `internal/tenant/repository.go`: implement caching for tenant runtime config to avoid ~5 DB queries + decryption per request. Added in-memory host→tenant and runtime caches with defensive cloning plus tests; Go lint/test pass, frontend CI still blocked by Playwright issue PG-312.
-- [ ] [PG-311] Fix potential null reference/crash in `ResolveByID` if `tenantID` is empty or invalid (missing edge validation).
+- [x] [PG-311] Fix potential null reference/crash in `ResolveByID` if `tenantID` is empty or invalid (missing edge validation). Added tenant ID validation + sentinel error; tests added. Go checks pass; `make ci` still blocked at Playwright (PG-312).
 - [ ] [PG-312] The tests are failing when running `make ci`. Find teh root cause and fix it.
 ```
   ✘  13 [chromium] › tests/e2e/landing.spec.ts:29:7 › Landing page auth flow › completes Google/TAuth handshake and redirects to dashboard (30.3s)
