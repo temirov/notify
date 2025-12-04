@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/temirov/pinguin/internal/model"
+	"github.com/temirov/pinguin/internal/tenant"
 )
 
 const dbTestTenantID = "tenant-db"
@@ -47,6 +48,20 @@ func TestInitDBCreatesSchema(t *testing.T) {
 	}
 	if fetched.NotificationID != "db-test" {
 		t.Fatalf("unexpected notification id %s", fetched.NotificationID)
+	}
+
+	tables := []interface{}{
+		&tenant.Tenant{},
+		&tenant.TenantDomain{},
+		&tenant.TenantMember{},
+		&tenant.TenantIdentity{},
+		&tenant.EmailProfile{},
+		&tenant.SMSProfile{},
+	}
+	for _, table := range tables {
+		if exists := database.Migrator().HasTable(table); !exists {
+			t.Fatalf("expected tenant table for %T", table)
+		}
 	}
 }
 

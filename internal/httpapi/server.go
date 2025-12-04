@@ -191,6 +191,10 @@ func buildCORS(allowedOrigins []string) gin.HandlerFunc {
 
 func tenantMiddleware(repo *tenant.Repository) gin.HandlerFunc {
 	return func(contextGin *gin.Context) {
+		if contextGin.Request != nil && contextGin.Request.URL != nil && contextGin.Request.URL.Path == "/healthz" {
+			contextGin.Next()
+			return
+		}
 		runtimeCfg, err := repo.ResolveByHost(contextGin.Request.Context(), contextGin.Request.Host)
 		if err != nil {
 			contextGin.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "tenant_not_found"})

@@ -138,6 +138,21 @@ func TestListNotificationsScopesByTenantHost(t *testing.T) {
 	}
 }
 
+func TestHealthzBypassesTenantLookup(t *testing.T) {
+	t.Helper()
+	repo := newTestTenantRepository(t, []string{"admin@example.com"})
+	server := newTestHTTPServerWithRepo(t, &stubNotificationService{}, &stubValidator{}, repo)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	request.Host = "unknown.localhost"
+
+	server.httpServer.Handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 for healthz, got %d", recorder.Code)
+	}
+}
+
 func TestRescheduleValidation(t *testing.T) {
 	t.Helper()
 
