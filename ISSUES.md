@@ -48,7 +48,5 @@ make: *** [test-frontend] Error 1
 
 ## Maintenance (400–499)
 
-
-
 ## Planning
 *do not work on these, not ready*

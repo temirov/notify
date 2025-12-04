@@ -5,7 +5,7 @@
  * stdout/stderr pipes are closed by the runner (e.g., timeout wrappers) while
  * the test runner or dev server is still emitting logs.
  */
-export default async function globalSetup() {
+module.exports = async function globalSetup() {
   const swallowEpipe = (stream) => {
     if (!stream) {
       return;
@@ -20,4 +20,4 @@ export default async function globalSetup() {
 
   swallowEpipe(process.stdout);
   swallowEpipe(process.stderr);
-}
+};

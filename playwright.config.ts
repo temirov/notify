@@ -21,7 +21,7 @@ export default defineConfig({
   webServer: {
     command: 'node tests/support/devServer.js',
     url: testServerUrl,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: true,
     stdout: 'pipe',
     stderr: 'pipe',
   },
