@@ -2,6 +2,7 @@ package tenant
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log"
 	"sync"
@@ -124,6 +125,26 @@ func TestRepositoryResolveByIDCachesRuntimeConfig(t *testing.T) {
 	}
 	if cachedQueries := counter.Count(); cachedQueries != 0 {
 		t.Fatalf("expected cached resolve by id to avoid database queries, got %d", cachedQueries)
+	}
+}
+
+func TestRepositoryResolveByIDRejectsEmpty(t *testing.T) {
+	t.Helper()
+	counter := newQueryCounter()
+	dbInstance := newTestDatabaseWithLogger(t, counter)
+	keeper := newTestSecretKeeper(t)
+	repo := NewRepository(dbInstance, keeper)
+
+	counter.Reset()
+	_, err := repo.ResolveByID(context.Background(), "   ")
+	if err == nil {
+		t.Fatalf("expected error for empty tenant id")
+	}
+	if !errors.Is(err, ErrInvalidTenantID) {
+		t.Fatalf("expected ErrInvalidTenantID, got %v", err)
+	}
+	if cachedQueries := counter.Count(); cachedQueries != 0 {
+		t.Fatalf("expected validation to short-circuit without queries, got %d", cachedQueries)
 	}
 }
 
