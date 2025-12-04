@@ -40,9 +40,13 @@ tenants:
       emailProfile:
         host: smtp.one.test
         port: 587
-        username: smtp-user
-        password: smtp-pass
+        username: ${SMTP_USERNAME}
+        password: ${SMTP_PASSWORD}
         fromAddress: noreply@one.test
+      smsProfile:
+        accountSid: ${TWILIO_ACCOUNT_SID}
+        authToken: ${TWILIO_AUTH_TOKEN}
+        fromNumber: ${TWILIO_FROM_NUMBER}
 web:
   enabled: true
   listenAddr: :8080
@@ -54,16 +58,6 @@ web:
     signingKey: ${TAUTH_SIGNING_KEY}
     issuer: tauth
     cookieName: custom_session
-smtp:
-  username: ${SMTP_USERNAME}
-  password: ${SMTP_PASSWORD}
-  host: smtp.test
-  port: 587
-  fromEmail: noreply@test
-twilio:
-  accountSid: ${TWILIO_ACCOUNT_SID}
-  authToken: ${TWILIO_AUTH_TOKEN}
-  fromNumber: "+10000000000"
 `)
 
 	t.Setenv("PINGUIN_CONFIG_PATH", configPath)
@@ -108,9 +102,14 @@ twilio:
 					EmailProfile: tenant.BootstrapEmailProfile{
 						Host:        "smtp.one.test",
 						Port:        587,
-						Username:    "smtp-user",
-						Password:    "smtp-pass",
+						Username:    "apikey",
+						Password:    "secret",
 						FromAddress: "noreply@one.test",
+					},
+					SMSProfile: &tenant.BootstrapSMSProfile{
+						AccountSID: "sid",
+						AuthToken:  "auth",
+						FromNumber: "+10000000000",
 					},
 				},
 			},
@@ -122,14 +121,6 @@ twilio:
 		TAuthSigningKey:      "signing-key",
 		TAuthIssuer:          "tauth",
 		TAuthCookieName:      "custom_session",
-		SMTPUsername:         "apikey",
-		SMTPPassword:         "secret",
-		SMTPHost:             "smtp.test",
-		SMTPPort:             587,
-		FromEmail:            "noreply@test",
-		TwilioAccountSID:     "sid",
-		TwilioAuthToken:      "auth",
-		TwilioFromNumber:     "+10000000000",
 		ConnectionTimeoutSec: 3,
 		OperationTimeoutSec:  7,
 	}
@@ -137,8 +128,8 @@ twilio:
 	if !reflect.DeepEqual(cfg, expected) {
 		t.Fatalf("unexpected config:\n got: %#v\nwant: %#v", cfg, expected)
 	}
-	if !cfg.TwilioConfigured() {
-		t.Fatalf("expected Twilio to be configured")
+	if cfg.TwilioConfigured() {
+		t.Fatalf("expected global Twilio credentials to remain empty when provided via tenants")
 	}
 }
 
@@ -180,18 +171,10 @@ web:
   tauth:
     signingKey: ${TAUTH_SIGNING_KEY}
     issuer: tauth
-smtp:
-  username: ${SMTP_USERNAME}
-  password: ${SMTP_PASSWORD}
-  host: smtp.test
-  port: 2525
-  fromEmail: noreply@test
 `)
 	t.Setenv("PINGUIN_CONFIG_PATH", configPath)
 	t.Setenv("MASTER_ENCRYPTION_KEY", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
 	t.Setenv("TAUTH_SIGNING_KEY", "signing-key")
-	t.Setenv("SMTP_USERNAME", "apikey")
-	t.Setenv("SMTP_PASSWORD", "secret")
 
 	cfg, err := LoadConfig(true)
 	if err != nil {
@@ -243,12 +226,6 @@ tenants:
         fromAddress: noreply@one.test
 web:
   enabled: false
-smtp:
-  username: user
-  password: pass
-  host: smtp.test
-  port: 25
-  fromEmail: noreply@test
 `)
 	t.Setenv("PINGUIN_CONFIG_PATH", configPath)
 
@@ -258,58 +235,6 @@ smtp:
 	}
 	if !strings.Contains(err.Error(), "server.grpcAuthToken") {
 		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestLoadConfigAllowsMissingTwilioSection(t *testing.T) {
-	t.Helper()
-	configPath := writeConfigFile(t, `
-server:
-  databasePath: db.sqlite
-  grpcAuthToken: token
-  logLevel: INFO
-  maxRetries: 1
-  retryIntervalSec: 10
-  masterEncryptionKey: key
-  connectionTimeoutSec: 5
-  operationTimeoutSec: 10
-tenants:
-  tenants:
-    - id: tenant-one
-      slug: one
-      displayName: One Corp
-      supportEmail: support@one.test
-      status: active
-      domains: [one.test]
-      admins:
-        - email: admin@one.test
-          role: owner
-      identity:
-        googleClientId: google-one
-        tauthBaseUrl: https://auth.one.test
-      emailProfile:
-        host: smtp.one.test
-        port: 587
-        username: smtp-user
-        password: smtp-pass
-        fromAddress: noreply@one.test
-web:
-  enabled: false
-smtp:
-  username: user
-  password: pass
-  host: smtp.test
-  port: 25
-  fromEmail: noreply@test
-`)
-	t.Setenv("PINGUIN_CONFIG_PATH", configPath)
-
-	cfg, err := LoadConfig(false)
-	if err != nil {
-		t.Fatalf("LoadConfig returned error: %v", err)
-	}
-	if cfg.TwilioConfigured() {
-		t.Fatalf("expected Twilio to be disabled")
 	}
 }
 

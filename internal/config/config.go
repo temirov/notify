@@ -51,8 +51,6 @@ type fileConfig struct {
 	Server  serverSection `yaml:"server"`
 	Web     webSection    `yaml:"web"`
 	Tenants tenantSection `yaml:"tenants"`
-	SMTP    smtpSection   `yaml:"smtp"`
-	Twilio  twilioSection `yaml:"twilio"`
 }
 
 type serverSection struct {
@@ -83,20 +81,6 @@ type tauthSection struct {
 type tenantSection struct {
 	ConfigPath string                   `yaml:"configPath"`
 	Tenants    []tenant.BootstrapTenant `yaml:"tenants"`
-}
-
-type smtpSection struct {
-	Username  string `yaml:"username"`
-	Password  string `yaml:"password"`
-	Host      string `yaml:"host"`
-	Port      int    `yaml:"port"`
-	FromEmail string `yaml:"fromEmail"`
-}
-
-type twilioSection struct {
-	AccountSID string `yaml:"accountSid"`
-	AuthToken  string `yaml:"authToken"`
-	FromNumber string `yaml:"fromNumber"`
 }
 
 // LoadConfig reads the YAML config file (with environment expansion) into Config.
@@ -140,14 +124,6 @@ func LoadConfig(disableWebInterface bool) (Config, error) {
 		TAuthSigningKey:      strings.TrimSpace(fileCfg.Web.TAuth.SigningKey),
 		TAuthIssuer:          strings.TrimSpace(fileCfg.Web.TAuth.Issuer),
 		TAuthCookieName:      strings.TrimSpace(fileCfg.Web.TAuth.CookieName),
-		SMTPUsername:         strings.TrimSpace(fileCfg.SMTP.Username),
-		SMTPPassword:         strings.TrimSpace(fileCfg.SMTP.Password),
-		SMTPHost:             strings.TrimSpace(fileCfg.SMTP.Host),
-		SMTPPort:             fileCfg.SMTP.Port,
-		FromEmail:            strings.TrimSpace(fileCfg.SMTP.FromEmail),
-		TwilioAccountSID:     strings.TrimSpace(fileCfg.Twilio.AccountSID),
-		TwilioAuthToken:      strings.TrimSpace(fileCfg.Twilio.AuthToken),
-		TwilioFromNumber:     strings.TrimSpace(fileCfg.Twilio.FromNumber),
 		ConnectionTimeoutSec: fileCfg.Server.ConnectionTimeout,
 		OperationTimeoutSec:  fileCfg.Server.OperationTimeout,
 		TenantBootstrap: tenant.BootstrapConfig{
@@ -219,12 +195,6 @@ func validateConfig(cfg Config) error {
 	}
 	requirePositive(cfg.ConnectionTimeoutSec, "server.connectionTimeoutSec", &errors)
 	requirePositive(cfg.OperationTimeoutSec, "server.operationTimeoutSec", &errors)
-
-	requireString(cfg.SMTPUsername, "smtp.username", &errors)
-	requireString(cfg.SMTPPassword, "smtp.password", &errors)
-	requireString(cfg.SMTPHost, "smtp.host", &errors)
-	requirePositive(cfg.SMTPPort, "smtp.port", &errors)
-	requireString(cfg.FromEmail, "smtp.fromEmail", &errors)
 
 	if cfg.WebInterfaceEnabled {
 		requireString(cfg.HTTPListenAddr, "web.listenAddr", &errors)
